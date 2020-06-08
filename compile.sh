@@ -7,6 +7,7 @@ insmod master_device.ko
 cd ../slave_device
 make
 insmod slave_device.ko
-cd ..
+cd ../user_program
 make
+
 

@@ -7,6 +7,8 @@ rmmod master_device.ko
 cd ../slave_device
 make clean
 rmmod slave_device.ko
-cd ..
+cd ../user_program
 make clean
+cd ..
+
 
