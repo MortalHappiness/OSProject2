@@ -1,7 +1,8 @@
 # OSProject2
-Project 2 for the course "Operating System" at NTU.
+Project 2 for the course "Operating System" in NTU.
 
-Website: https://mortalhappiness.github.io/OSProject2/
+## Website
+https://mortalhappiness.github.io/OSProject2/
 
 ## Directory structure
 
