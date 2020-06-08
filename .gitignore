@@ -1,1 +1,23 @@
 *.o
+
+# user_program/
+user_program/master
+user_program/slave
+
+# ksocket/
+ksocket/*
+!ksocket/Makefile
+!ksocket/ksocket.c
+!ksocket/ksocket.h
+!ksocket/sxgdebug.h
+
+# master_device/
+master_device/*
+!master_device/Makefile
+!master_device/master_device.c
+
+# slave_device/
+slave_device/*
+!slave_device/Makefile
+!slave_device/slave_device.c
+
