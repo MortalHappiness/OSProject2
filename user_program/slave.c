@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -20,9 +21,7 @@ int main (int argc, char* argv[])
     int dev_fd, file_fd;// the fd for the device and the fd for the input file
     size_t ret, file_size, data_size = -1;
     int n_files;
-    char file_name[50];
-    char method[20];
-    char ip[20];
+    char *file_name;
     struct timeval start;
     struct timeval end;
     double trans_time; //calulate the time between the device is opened and it is closed
@@ -40,8 +39,8 @@ int main (int argc, char* argv[])
         help_message();
         return 1;
     }
-    strcpy(method, argv[argc - 2]);
-    strcpy(ip, argv[argc - 1]);
+    const char *method = argv[argc - 2];
+    const char *ip = argv[argc - 1];
 
     // ==============================
 
@@ -55,9 +54,9 @@ int main (int argc, char* argv[])
     // Now, for each file I create a socket.
     // Maybe we need to consider how to transmit all files with single socket.
 
-    for (int i = 2; i < argc - 2; ++i)
+    for (int i = 2; n_files > 0; ++i, --n_files)
     {
-        strcpy(file_name, argv[i]);
+        file_name = argv[i];
         file_size = 0;
         if( (file_fd = open (file_name, O_RDWR | O_CREAT | O_TRUNC)) < 0)
         {
@@ -99,7 +98,7 @@ int main (int argc, char* argv[])
 
         gettimeofday(&end, NULL);
         trans_time = (end.tv_sec - start.tv_sec)*1000 + (end.tv_usec - start.tv_usec)*0.0001;
-        printf("Transmission time: %lf ms, File size: %d bytes\n", trans_time, file_size / 8);
+        printf("Transmission time: %lf ms, File size: %ld bytes\n", trans_time, file_size / 8);
 
         close(file_fd);
     }
