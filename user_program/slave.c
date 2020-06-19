@@ -47,13 +47,43 @@ int main (int argc, char* argv[])
 
 	switch(method[0])
 	{
-		case 'f'://fcntl : read()/write()
+		case 'f': //fcntl : read()/write()
 			do
 			{
 				ret = read(dev_fd, buf, sizeof(buf)); // read from the the device
 				write(file_fd, buf, ret); //write to the input file
 				file_size += ret;
 			}while(ret > 0);
+        case 'm': //mmap
+		    size_t pageoff = 0;
+            char *dst, *src;
+			while(pageoff < file_size)
+			{
+				// maybe we can use mmap instead
+				ret = read(dev_fd, buf, sizeof(buf)); // read from the the device
+			    dst = mmap(NULL, PAGE_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, file_fd, pageoff);
+				char *tmp = dst;
+				// read BUF_SIZE bytes each round
+				for(int i = 0; i < 8; ++i)
+				{
+					memcpy(tmp, buf, BUF_SIZE);
+					tmp += BUF_SIZE;
+				}
+				pageoff += PAGE_SIZE;
+				munmap(dst, PAGE_SIZE);
+			}
+			// or we can try another version
+            // src = mmap(NULL, file_size, PROT_READ|PROT_WRITE, MAP_SHARED, file_fd, pageoff);
+			// char *tmp = src;
+			// size_t length = 0;
+			// while(length < file_size)
+			// {
+            //    memcpy(dst, src, BUF_SIZE);
+			//    src += BUF_SIZE;
+			//    length += BUF_SIZE;
+			// }
+			// munmap(src, file_size);
+		
 			break;
 	}
 

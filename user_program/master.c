@@ -58,10 +58,42 @@ int main (int argc, char* argv[])
 			do
 			{
 				ret = read(file_fd, buf, sizeof(buf)); // read from the input file
-				write(dev_fd, buf, ret);//write to the the device
+				write(dev_fd, buf, ret); //write to the the device
 			}while(ret > 0);
 			break;
-	}
+        case 'm': // mmap()
+		    size_t pageoff = 0;
+            char *src;
+			while(pageoff < file_size)
+			{
+				// read from file
+            	src = mmap(NULL, PAGE_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, file_fd, pageoff);
+				char *tmp = src;
+				// read BUF_SIZE bytes each round
+				for(int i = 0; i < 8; ++i)
+				{
+					memcpy(buf, tmp, BUF_SIZE);
+					tmp += BUF_SIZE;
+					// maybe this step can use mmap
+					write(dev_fd, buf, BUF_SIZE);
+				}
+				pageoff += PAGE_SIZE;
+				munmap(src, PAGE_SIZE);
+			}
+			// or we can try another version
+            // src = mmap(NULL, file_size, PROT_READ|PROT_WRITE, MAP_SHARED, file_fd, pageoff);
+			// char *tmp = src;
+			// size_t length = 0;
+			// while(length < file_size)
+			// {
+            //    memcpy(dst, src, BUF_SIZE);
+			//    src += BUF_SIZE;
+			//    length += BUF_SIZE;
+			// }
+			// munmap(src, file_size);
+
+		    break;
+}
 
 	if(ioctl(dev_fd, 0x12345679) == -1) // end sending data, close the connection
 	{
