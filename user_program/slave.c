@@ -60,12 +60,12 @@ int main (int argc, char* argv[])
 			while(pageoff < file_size)
 			{
 				// maybe we can use mmap instead
-				ret = read(dev_fd, buf, sizeof(buf)); // read from the the device
 			    dst = mmap(NULL, PAGE_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, file_fd, pageoff);
 				char *tmp = dst;
 				// read BUF_SIZE bytes each round
 				for(int i = 0; i < 8; ++i)
 				{
+				    read(dev_fd, buf, sizeof(buf)); // read from the the device
 					memcpy(tmp, buf, BUF_SIZE);
 					tmp += BUF_SIZE;
 				}
