@@ -55,34 +55,33 @@ int main (int argc, char* argv[])
 				file_size += ret;
 			}while(ret > 0);
         case 'm': //mmap
-		    size_t pageoff = 0;
+		    size_t pageoff = 0, diff = 0;
             char *dst, *src;
+
+			dst = mmap(NULL, file_size, PROT_READ|PROT_WRITE, MAP_SHARED, file_fd, pageoff);
+			char *tmp = dst;
 			while(pageoff < file_size)
 			{
+				// read diff bytes each round
+                diff = file_size - pageoff;
 				// maybe we can use mmap instead
-			    dst = mmap(NULL, PAGE_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, file_fd, pageoff);
-				char *tmp = dst;
-				// read BUF_SIZE bytes each round
-				for(int i = 0; i < 8; ++i)
-				{
-				    read(dev_fd, buf, sizeof(buf)); // read from the the device
-					memcpy(tmp, buf, BUF_SIZE);
-					tmp += BUF_SIZE;
-				}
-				pageoff += PAGE_SIZE;
-				munmap(dst, PAGE_SIZE);
+                read(dev_fd, buf, diff); // read from the the device
+
+                if(diff > BUF_SIZE)
+                {
+                    memcpy(tmp, buf, BUF_SIZE);
+                    tmp += BUF_SIZE;
+				    pageoff += BUF_SIZE;
+                }
+                else
+                {
+                    memcpy(tmp, buf, diff);
+                    tmp += diff;
+				    pageoff += diff;
+                    break;
+                }
 			}
-			// or we can try another version
-            // src = mmap(NULL, file_size, PROT_READ|PROT_WRITE, MAP_SHARED, file_fd, pageoff);
-			// char *tmp = src;
-			// size_t length = 0;
-			// while(length < file_size)
-			// {
-            //    memcpy(dst, src, BUF_SIZE);
-			//    src += BUF_SIZE;
-			//    length += BUF_SIZE;
-			// }
-			// munmap(src, file_size);
+			munmap(dst, file_size);
 		
 			break;
 	}
