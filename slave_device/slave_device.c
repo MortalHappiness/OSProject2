@@ -19,7 +19,6 @@
 #include <linux/debugfs.h>
 #include <linux/mm.h>
 #include <asm/page.h>
-#include <stdlib.h>
 
 #ifndef VM_RESERVED
 #define VM_RESERVED   (VM_DONTEXPAND | VM_DONTDUMP)
@@ -165,7 +164,7 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 		case slave_IOCTL_MMAP: ;
 			char buf[20];
 			krecv(sockfd_cli, buf, sizeof(buf), 0);
-			ret = (long)atoi(buf);
+			sscanf(buf, "%ld", &ret); 
 			break;
 
 		case slave_IOCTL_EXIT:
