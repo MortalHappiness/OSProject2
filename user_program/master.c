@@ -91,7 +91,7 @@ int main (int argc, char* argv[])
 				if(ioctl(dev_fd, master_IOCTL_MMAP, file_size) == -1) // Send file size to slave device
 				{
 					perror("failed to send file size to slave device\n");
-					return 1;
+					// return 1;
 				}
 				src = mmap(NULL, file_size, PROT_READ|PROT_WRITE, MAP_SHARED, file_fd, 0);
 				char *tmp = src;
