@@ -54,7 +54,6 @@ int slave_close(struct inode *inode, struct file *filp);
 int slave_open(struct inode *inode, struct file *filp);
 static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param);
 ssize_t receive_msg(struct file *filp, char *buf, size_t count, loff_t *offp );
-ssize_t recv_fs(struct file *filp, size_t *buf, loff_t *offp );
 
 static mm_segment_t old_fs;
 static ksocket_t sockfd_cli;//socket to the master server
@@ -66,8 +65,7 @@ static struct file_operations slave_fops = {
 	.unlocked_ioctl = slave_ioctl,
 	.open = slave_open,
 	.read = receive_msg,
-	.release = slave_close,
-	.recv_filesize = recv_fs
+	.release = slave_close
 };
 
 //device info
@@ -165,7 +163,9 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 			ret = 0;
 			break;
 		case slave_IOCTL_MMAP:
-
+			size_t file_size;
+			krecv(sockfd_cli, &file_size, sizeof(file_size), 0);
+			ret = file_size;
 			break;
 
 		case slave_IOCTL_EXIT:
@@ -203,16 +203,16 @@ ssize_t receive_msg(struct file *filp, char *buf, size_t count, loff_t *offp )
 	return len;
 }
 
-ssize_t recv_fs(struct file *filp, size_t *buf, loff_t *offp )
-{
-//called when user call recv_filesize
-	size_t file_size;
-	size_t len;
-	len = krecv(sockfd_cli, &file_size, sizeof(file_size), 0);
-	if(copy_to_user(buf, &file_size, len))
-		return -ENOMEM;
-	return len;
-}
+// ssize_t recv_fs(struct file *filp, size_t *buf, loff_t *offp )
+// {
+// //called when user call recv_filesize
+// 	size_t file_size;
+// 	size_t len;
+// 	len = krecv(sockfd_cli, &file_size, sizeof(file_size), 0);
+// 	if(copy_to_user(buf, &file_size, len))
+// 		return -ENOMEM;
+// 	return len;
+// }
 
 
 

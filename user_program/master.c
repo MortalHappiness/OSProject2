@@ -88,12 +88,11 @@ int main (int argc, char* argv[])
             case 'm': ;// mmap
                 size_t pageoff = 0, diff = 0;
 				char *src;
-				// if(ioctl(dev_fd, master_IOCTL_MMAP) == -1) // Send file size to slave device
-				// {
-				// 	perror("failed to init mmap\n");
-				// 	return 1;
-				// }
-				send_filesize(dev_fd, &file_size);
+				if(ioctl(dev_fd, master_IOCTL_MMAP, file_size) == -1) // Send file size to slave device
+				{
+					perror("failed to send file size to slave device\n");
+					return 1;
+				}
 				src = mmap(NULL, file_size, PROT_READ|PROT_WRITE, MAP_SHARED, file_fd, 0);
 				char *tmp = src;
 				while(pageoff < file_size)

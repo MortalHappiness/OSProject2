@@ -51,7 +51,6 @@ int master_close(struct inode *inode, struct file *filp);
 int master_open(struct inode *inode, struct file *filp);
 static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param);
 static ssize_t send_msg(struct file *file, const char __user *buf, size_t count, loff_t *data);//use when user is writing to this device
-static ssize_t send_fs(struct file *file, const size_t __user *fs, loff_t *data);
 static ksocket_t sockfd_srv, sockfd_cli;//socket for master and socket for slave
 static struct sockaddr_in addr_srv;//address for master
 static struct sockaddr_in addr_cli;//address for slave
@@ -66,7 +65,6 @@ static struct file_operations master_fops = {
 	.open = master_open,
 	.write = send_msg,
 	.release = master_close,
-	.send_filesize = send_fs
 };
 
 //device info
@@ -177,8 +175,9 @@ static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 			ret = 0;
 			break;
 		case master_IOCTL_MMAP:
-
-			//ksend(sockfd_cli, msg, count, 0); // send file size to slave device
+			size_t file_size = ioctl_param;
+			ksend(sockfd_cli, &file_size, sizeof(file_size), 0); // send file size to slave device
+			printk("Sent file size to slave\n");
 			break;
 		case master_IOCTL_EXIT:
 			if(kclose(sockfd_cli) == -1)
@@ -215,15 +214,15 @@ static ssize_t send_msg(struct file *file, const char __user *buf, size_t count,
 
 }
 
-static ssize_t send_fs(struct file *file, const size_t __user *fs, loff_t *data)
-{
-// call when user call send_filesize
-	size_t file_size;
-	if(copy_from_user(&file_size, fs, sizeof(file_size)))
-		return -ENOMEM;
-	ksend(sockfd_cli, &file_size, sizeof(file_size), 0);
-	return sizeof(file_size);
-}
+// static ssize_t send_fs(struct file *file, const size_t __user *fs, loff_t *data)
+// {
+// // call when user call send_filesize
+// 	size_t file_size;
+// 	if(copy_from_user(&file_size, fs, sizeof(file_size)))
+// 		return -ENOMEM;
+// 	ksend(sockfd_cli, &file_size, sizeof(file_size), 0);
+// 	return sizeof(file_size);
+// }
 
 
 module_init(master_init);

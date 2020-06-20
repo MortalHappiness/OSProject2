@@ -11,6 +11,9 @@
 
 #define PAGE_SIZE 4096
 #define BUF_SIZE 512
+#define master_IOCTL_CREATESOCK 0x12345677
+#define master_IOCTL_MMAP 0x12345678
+#define master_IOCTL_EXIT 0x12345679
 int main (int argc, char* argv[])
 {
     char buf[BUF_SIZE];
@@ -61,7 +64,7 @@ int main (int argc, char* argv[])
         }
 
         gettimeofday(&start ,NULL);
-        if(ioctl(dev_fd, 0x12345677, ip) == -1) //0x12345677 : connect to master in the device
+        if(ioctl(dev_fd, master_IOCTL_CREATESOCK, ip) == -1) //0x12345677 : connect to master in the device
         {
             perror("ioctl create slave socket error\n");
             return 1;
@@ -81,7 +84,11 @@ int main (int argc, char* argv[])
             case 'm': ;//mmap
 				size_t pageoff = 0, diff = 0;
 				char *dst, *src;
-				recv_filesize(dev_fd, &file_size);
+				if(file_size = ioctl(dev_fd, master_IOCTL_MMAP) == 0) // recv file size from slave device
+				{
+					perror("failed to recv file size from slave device\n");
+					return 1;
+				}
 				printf("file_size is %d\n", file_size);
 				dst = mmap(NULL, file_size, PROT_READ|PROT_WRITE, MAP_SHARED, file_fd, pageoff);
 				char *tmp = dst;
@@ -114,7 +121,7 @@ int main (int argc, char* argv[])
                 return 1;
         }
 
-        if(ioctl(dev_fd, 0x12345679) == -1)// end receiving data, close the connection
+        if(ioctl(dev_fd, master_IOCTL_EXIT) == -1)// end receiving data, close the connection
         {
             perror("ioclt client exits error\n");
             return 1;
