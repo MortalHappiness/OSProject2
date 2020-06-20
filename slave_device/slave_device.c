@@ -163,9 +163,9 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 			ret = 0;
 			break;
 		case slave_IOCTL_MMAP: ;
-			char* buf;
-			krecv(sockfd_cli, buf, sizeof(size_t), 0);
-			ret = (size_t*)buf;
+			char buf[20];
+			krecv(sockfd_cli, buf, sizeof(buf), 0);
+			ret = (long)atoi(buf);
 			break;
 
 		case slave_IOCTL_EXIT:

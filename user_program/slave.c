@@ -87,9 +87,9 @@ int main (int argc, char* argv[])
 				if(file_size = ioctl(dev_fd, slave_IOCTL_MMAP) == 0) // recv file size from slave device
 				{
 					perror("failed to recv file size from slave device\n");
-					return 1;
 				}
-				printf("file_size is %d\n", file_size);
+                file_size = (size_t)file_size;
+				printf("file_size is %zu\n", file_size);
 				dst = mmap(NULL, file_size, PROT_READ|PROT_WRITE, MAP_SHARED, file_fd, pageoff);
 				char *tmp = dst;
 				while(pageoff < file_size)
