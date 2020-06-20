@@ -174,7 +174,7 @@ static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 			kfree(tmp);
 			ret = 0;
 			break;
-		case master_IOCTL_MMAP:
+		case master_IOCTL_MMAP: ;
 			size_t file_size = ioctl_param;
 			//char* buf = (char*)&file_size;
 			ksend(sockfd_cli, (char*)&file_size, sizeof(file_size), 0); // send file size to slave device

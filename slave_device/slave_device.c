@@ -162,7 +162,7 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 			printk("kfree(tmp)");
 			ret = 0;
 			break;
-		case slave_IOCTL_MMAP:
+		case slave_IOCTL_MMAP: ;
 			char* buf;
 			krecv(sockfd_cli, buf, sizeof(size_t), 0);
 			ret = (size_t*)buf;
