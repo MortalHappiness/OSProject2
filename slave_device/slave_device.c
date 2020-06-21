@@ -20,7 +20,6 @@
 #include <linux/mm.h>
 #include <asm/page.h>
 
-
 #ifndef VM_RESERVED
 #define VM_RESERVED   (VM_DONTEXPAND | VM_DONTDUMP)
 #endif
@@ -162,8 +161,13 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 			printk("kfree(tmp)");
 			ret = 0;
 			break;
-		case slave_IOCTL_MMAP:
-
+		case slave_IOCTL_MMAP: ;
+			char buf[20];
+			krecv(sockfd_cli, buf, sizeof(buf), 0);
+			printk("The received file's size is %s bytes\n", buf);
+			sscanf(buf, "%ld", &ret); 
+            // kstrtol(buf, 10, &ret);
+			printk("ret = %ld\n", ret);
 			break;
 
 		case slave_IOCTL_EXIT:
@@ -192,7 +196,7 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 
 ssize_t receive_msg(struct file *filp, char *buf, size_t count, loff_t *offp )
 {
-//call when user is reading from this device
+//called when user is reading from this device
 	char msg[BUF_SIZE];
 	size_t len;
 	len = krecv(sockfd_cli, msg, sizeof(msg), 0);
@@ -200,6 +204,17 @@ ssize_t receive_msg(struct file *filp, char *buf, size_t count, loff_t *offp )
 		return -ENOMEM;
 	return len;
 }
+
+// ssize_t recv_fs(struct file *filp, size_t *buf, loff_t *offp )
+// {
+// //called when user call recv_filesize
+// 	size_t file_size;
+// 	size_t len;
+// 	len = krecv(sockfd_cli, &file_size, sizeof(file_size), 0);
+// 	if(copy_to_user(buf, &file_size, len))
+// 		return -ENOMEM;
+// 	return len;
+// }
 
 
 

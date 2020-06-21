@@ -28,6 +28,7 @@
 #define master_IOCTL_CREATESOCK 0x12345677
 #define master_IOCTL_MMAP 0x12345678
 #define master_IOCTL_EXIT 0x12345679
+#define master_IOCTL_GETFS 0x12345688 // get file size
 #define BUF_SIZE 512
 
 typedef struct socket * ksocket_t;
@@ -50,7 +51,6 @@ int master_close(struct inode *inode, struct file *filp);
 int master_open(struct inode *inode, struct file *filp);
 static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param);
 static ssize_t send_msg(struct file *file, const char __user *buf, size_t count, loff_t *data);//use when user is writing to this device
-
 static ksocket_t sockfd_srv, sockfd_cli;//socket for master and socket for slave
 static struct sockaddr_in addr_srv;//address for master
 static struct sockaddr_in addr_cli;//address for slave
@@ -64,7 +64,7 @@ static struct file_operations master_fops = {
 	.unlocked_ioctl = master_ioctl,
 	.open = master_open,
 	.write = send_msg,
-	.release = master_close
+	.release = master_close,
 };
 
 //device info
@@ -174,7 +174,14 @@ static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 			kfree(tmp);
 			ret = 0;
 			break;
-		case master_IOCTL_MMAP:
+		case master_IOCTL_MMAP: ;
+			size_t file_size = ioctl_param;
+			char tmp_string[20];
+			printk("The filesize to be sent is %s bytes\n", tmp_string);
+			sprintf(tmp_string, "%zu", file_size);
+			ksend(sockfd_cli, tmp_string, sizeof(tmp_string), 0); // send file size to slave device
+			printk("Sent file size to slave\n");
+			ret = 0;
 			break;
 		case master_IOCTL_EXIT:
 			if(kclose(sockfd_cli) == -1)
@@ -211,7 +218,15 @@ static ssize_t send_msg(struct file *file, const char __user *buf, size_t count,
 
 }
 
-
+// static ssize_t send_fs(struct file *file, const size_t __user *fs, loff_t *data)
+// {
+// // call when user call send_filesize
+// 	size_t file_size;
+// 	if(copy_from_user(&file_size, fs, sizeof(file_size)))
+// 		return -ENOMEM;
+// 	ksend(sockfd_cli, &file_size, sizeof(file_size), 0);
+// 	return sizeof(file_size);
+// }
 
 
 module_init(master_init);
