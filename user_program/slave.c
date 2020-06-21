@@ -57,7 +57,7 @@ int main (int argc, char* argv[])
     {
         file_name = argv[i];
         file_size = 0;
-        if( (file_fd = open (file_name, O_RDWR | O_CREAT | O_TRUNC)) < 0)
+        if( (file_fd = open (file_name, O_RDWR | O_CREAT | O_TRUNC, 0666)) < 0)
         {
             perror("failed to open input file\n");
             return 1;
@@ -89,31 +89,58 @@ int main (int argc, char* argv[])
 					perror("failed to recv file size from slave device\n");
 				}
                 file_size = (size_t)file_size;
+                // for testing
+                file_size = 826;
 				printf("file_size is %zu\n", file_size);
-				dst = mmap(NULL, file_size, PROT_READ|PROT_WRITE, MAP_SHARED, file_fd, pageoff);
-				char *tmp = dst;
+				// dst = mmap(NULL, file_size, PROT_READ|PROT_WRITE, MAP_SHARED, file_fd, 0);
+				// char *tmp = dst;
+
+                // lseek(file_fd, file_size - 1, SEEK_SET);
+                // write(file_fd, "", 1);
+                // lseek(file_fd, 0, SEEK_SET);
+
+                // expand the file size
+                ftruncate(file_fd, file_size);
+
 				while(pageoff < file_size)
 				{
+                    dst = mmap(NULL, PAGE_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, file_fd, pageoff);
+				    char *tmp = dst;
 					// read diff bytes each round
 					diff = file_size - pageoff;
 					// maybe we can use mmap instead
-					read(dev_fd, buf, diff); // read from the the device
 
-					if(diff > BUF_SIZE)
-					{
-						memcpy(tmp, buf, BUF_SIZE);
-						tmp += BUF_SIZE;
-						pageoff += BUF_SIZE;
-					}
-					else
-					{
-						memcpy(tmp, buf, diff);
-						tmp += diff;
-						pageoff += diff;
-						break;
-					}
+                    for(int i = 0; i < 8; ++i)
+                    {
+                        if(diff > BUF_SIZE)
+                        {
+                            printf("slave pageoff = %zu\n", pageoff);
+                            read(dev_fd, buf, sizeof(buf)); // read from the the device
+                            printf("buf = %s\n", buf);
+                            // write(file_fd, buf, BUF_SIZE);
+                            memmove(tmp, buf, BUF_SIZE);
+                            tmp += BUF_SIZE;
+                            pageoff += BUF_SIZE;
+                            diff -= BUF_SIZE;
+                        }
+                        else
+                        {
+                            printf("slave pageoff = %zu\n", pageoff);
+                            memset(buf, 0, BUF_SIZE);
+                            read(dev_fd, buf, diff); // read from the the device
+                            printf("buf = %s\n", buf);
+                            // write(file_fd, buf, diff);
+                            memmove(tmp, buf, diff);
+                            tmp += diff;
+                            pageoff += diff;
+                            diff = 0;
+                            break;
+					    }
+                    }
+
+				    munmap(dst, PAGE_SIZE);
 				}
-				munmap(dst, file_size);
+				// munmap(dst, file_size);
 				break;
 
             default:
