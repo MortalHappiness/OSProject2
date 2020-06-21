@@ -10,22 +10,29 @@
 #include <sys/types.h>
 #include <sys/time.h>
 
+#define master_IOCTL_CREATESOCK 0x12345677
+#define master_IOCTL_MMAP 0x12345678
+#define master_IOCTL_EXIT 0x12345679
 #define PAGE_SIZE 4096
 #define BUF_SIZE 512
+
 void help_message(); // print the help message
 size_t get_filesize(const char* filename); // get the size of the input file
+
+// ========================================
 
 int main (int argc, char* argv[])
 {
     char buf[BUF_SIZE];
     int dev_fd, file_fd;// the fd for the device and the fd for the input file
-    size_t ret, file_size, offset = 0, tmp;
+    size_t ret, file_size, total_file_size, offset = 0, tmp;
     int n_files;
     char *file_name;
     char *kernel_address = NULL, *file_address = NULL;
     struct timeval start;
     struct timeval end;
-    double trans_time; //calulate the time between the device is opened and it is closed
+    //calulate the time between the device is opened and it is closed
+    double trans_time;
 
     // Deal with input parameters
     if (argc < 4)
@@ -43,6 +50,8 @@ int main (int argc, char* argv[])
 
     // ==============================
 
+    gettimeofday(&start ,NULL);
+
     if( (dev_fd = open("/dev/master_device", O_RDWR)) < 0)
     {
         perror("failed to open /dev/master_device\n");
@@ -53,7 +62,6 @@ int main (int argc, char* argv[])
     // Now, for each file I create a socket.
     // Maybe we need to consider how to transmit all files with single socket.
 
-    gettimeofday(&start ,NULL);
     for (int i = 2; n_files > 0; ++i, --n_files)
     {
         file_name = argv[i];
@@ -68,8 +76,10 @@ int main (int argc, char* argv[])
             perror("failed to get filesize\n");
             return 1;
         }
+        total_file_size += file_size;
 
-        if(ioctl(dev_fd, 0x12345677) == -1) //0x12345677 : create socket and accept the connection from the slave
+        // Create socket and accept the connection from the slave
+        if(ioctl(dev_fd, master_IOCTL_CREATESOCK) == -1)
         {
             perror("ioctl server create socket error\n");
             return 1;
@@ -93,7 +103,8 @@ int main (int argc, char* argv[])
                 return 1;
         }
 
-        if(ioctl(dev_fd, 0x12345679) == -1) // end sending data, close the connection
+        // end sending data, close the connection
+        if(ioctl(dev_fd, master_IOCTL_EXIT) == -1)
         {
             perror("ioclt server exits error\n");
             return 1;
@@ -102,11 +113,14 @@ int main (int argc, char* argv[])
         close(file_fd);
     }
 
-    gettimeofday(&end, NULL);
-    trans_time = (end.tv_sec - start.tv_sec)*1000 + (end.tv_usec - start.tv_usec)*0.0001;
-    printf("Transmission time: %lf ms, File size: %ld bytes\n", trans_time, file_size / 8);
-
     close(dev_fd);
+
+    gettimeofday(&end, NULL);
+    trans_time = (end.tv_sec - start.tv_sec)*1000 +
+                 (end.tv_usec - start.tv_usec)*0.0001;
+    printf("Transmission time: %lf ms, File size: %ld bytes\n",
+            trans_time, total_file_size);
+
     return 0;
 }
 

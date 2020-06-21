@@ -10,21 +10,26 @@
 #include <sys/types.h>
 #include <sys/time.h>
 
+#define slave_IOCTL_CREATESOCK 0x12345677
+#define slave_IOCTL_MMAP 0x12345678
+#define slave_IOCTL_EXIT 0x12345679
 #define PAGE_SIZE 4096
 #define BUF_SIZE 512
 void help_message();
 
+// ========================================
 
 int main (int argc, char* argv[])
 {
     char buf[BUF_SIZE];
     int dev_fd, file_fd;// the fd for the device and the fd for the input file
-    size_t ret, file_size, data_size = -1;
+    size_t ret, total_file_size = 0, data_size = -1;
     int n_files;
     char *file_name;
     struct timeval start;
     struct timeval end;
-    double trans_time; //calulate the time between the device is opened and it is closed
+    //calulate the time between the device is opened and it is closed
+    double trans_time;
     char *kernel_address, *file_address;
 
     // Deal with input parameters
@@ -44,7 +49,10 @@ int main (int argc, char* argv[])
 
     // ==============================
 
-    if( (dev_fd = open("/dev/slave_device", O_RDWR)) < 0)//should be O_RDWR for PROT_WRITE when mmap()
+    gettimeofday(&start ,NULL);
+
+    //should be O_RDWR for PROT_WRITE when mmap()
+    if( (dev_fd = open("/dev/slave_device", O_RDWR)) < 0)
     {
         perror("failed to open /dev/slave_device\n");
         return 1;
@@ -54,18 +62,17 @@ int main (int argc, char* argv[])
     // Now, for each file I create a socket.
     // Maybe we need to consider how to transmit all files with single socket.
 
-    gettimeofday(&start ,NULL);
     for (int i = 2; n_files > 0; ++i, --n_files)
     {
         file_name = argv[i];
-        file_size = 0;
         if( (file_fd = open (file_name, O_RDWR | O_CREAT | O_TRUNC)) < 0)
         {
             perror("failed to open input file\n");
             return 1;
         }
 
-        if(ioctl(dev_fd, 0x12345677, ip) == -1) //0x12345677 : connect to master in the device
+        // Connect to master in the device
+        if(ioctl(dev_fd, slave_IOCTL_CREATESOCK, ip) == -1)
         {
             perror("ioctl create slave socket error\n");
             return 1;
@@ -78,7 +85,7 @@ int main (int argc, char* argv[])
                 while ((ret = read(dev_fd, buf, sizeof(buf))) > 0)
                 {
                     write(file_fd, buf, ret); //write to the input file
-                    file_size += ret;
+                    total_file_size += ret;
                 }
                 break;
 
@@ -90,7 +97,8 @@ int main (int argc, char* argv[])
                 return 1;
         }
 
-        if(ioctl(dev_fd, 0x12345679) == -1)// end receiving data, close the connection
+        // end receiving data, close the connection
+        if(ioctl(dev_fd, slave_IOCTL_EXIT) == -1)
         {
             perror("ioclt client exits error\n");
             return 1;
@@ -99,11 +107,14 @@ int main (int argc, char* argv[])
         close(file_fd);
     }
 
-    gettimeofday(&end, NULL);
-    trans_time = (end.tv_sec - start.tv_sec)*1000 + (end.tv_usec - start.tv_usec)*0.0001;
-    printf("Transmission time: %lf ms, File size: %ld bytes\n", trans_time, file_size / 8);
-
     close(dev_fd);
+
+    gettimeofday(&end, NULL);
+    trans_time = (end.tv_sec - start.tv_sec)*1000 +
+                 (end.tv_usec - start.tv_usec)*0.0001;
+    printf("Transmission time: %lf ms, File size: %ld bytes\n",
+            trans_time, total_file_size);
+
     return 0;
 }
 
