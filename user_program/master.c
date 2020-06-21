@@ -96,55 +96,45 @@ int main (int argc, char* argv[])
                 }
                 break;
 
+            size_t pageoff = 0, diff = 0;
             case 'm': ;// mmap
-                size_t pageoff = 0, diff = 0;
-				char *src;
-				if(ioctl(dev_fd, master_IOCTL_MMAP, file_size) == -1) // Send file size to slave device
-				{
-					perror("failed to send file size to slave device\n");
-					// return 1;
-				}
-                // src = mmap(NULL, file_size, PROT_READ|PROT_WRITE, MAP_SHARED, file_fd, 0);
-				// char *tmp = src;
-				while(pageoff < file_size)
-				{
-				    src = mmap(NULL, PAGE_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, file_fd, pageoff);
-				    char *tmp = src;
-					// read from file
-					diff = file_size - pageoff;
+                char *src;
+                if(ioctl(dev_fd, master_IOCTL_MMAP, file_size) == -1) // Send file size to slave device
+                {
+                    perror("failed to send file size to slave device\n");
+                    // return 1;
+                }
+                src = mmap(NULL, file_size, PROT_READ|PROT_WRITE, MAP_SHARED, file_fd, 0);
+                char *tmp = src;
+                while(pageoff < file_size)
+                {
+                    // read from file
+                    diff = file_size - pageoff;
 
-                    for(int i = 0; i < 8; ++i)
+                    if(diff > BUF_SIZE)
                     {
-                        if(diff > BUF_SIZE)
-                        {
-                            // read BUF_SIZE bytes each round
-                            memmove(buf, tmp, BUF_SIZE);
-                            printf("master buf = %s\n", buf);
-                            tmp += BUF_SIZE;
-                            pageoff += BUF_SIZE;
-                            diff -= BUF_SIZE;
-                            // maybe this step can use mmap
-                            write(dev_fd, buf, BUF_SIZE);
-                        }
-                        else
-                        {
-                            // reset to 0
-                            memset(buf, 0, BUF_SIZE);
-                            // read the remain data
-                            memmove(buf, tmp, diff);
-                            printf("master buf = %s\n", buf);
-                            tmp += diff;
-                            pageoff += diff;
-                            diff = 0;
-                            // maybe this step can use mmap
-                            write(dev_fd, buf, diff);
-                            break;
-                        }
+                        // read BUF_SIZE bytes each round
+                        memcpy(buf, tmp, BUF_SIZE);
+                        tmp += BUF_SIZE;
+                        pageoff += BUF_SIZE;
+                        // maybe this step can use mmap
+                        write(dev_fd, buf, BUF_SIZE);
                     }
-                    munmap(src, PAGE_SIZE);
-				}
-				// munmap(src, file_size);
-				break;
+                    else
+                    {
+                        // reset to 0
+                        memset(buf, 0, BUF_SIZE);
+                        // read the remain data
+                        memcpy(buf, tmp, diff);
+                        tmp += diff;
+                        pageoff += diff;
+                        // maybe this step can use mmap
+                        write(dev_fd, buf, diff);
+                        break;
+                    }
+                }
+                munmap(src, file_size);
+                break;
 
             default:
                 fprintf(stderr, "Invalid method : %s\n", method);
