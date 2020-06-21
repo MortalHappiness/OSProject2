@@ -93,13 +93,10 @@ int main (int argc, char* argv[])
             case 'm': ;//mmap
 				size_t pageoff = 0, diff = 0;
 				char *dst, *src;
-				if(file_size = ioctl(dev_fd, slave_IOCTL_MMAP) == 0) // recv file size from slave device
+				if((file_size = (size_t)ioctl(dev_fd, slave_IOCTL_MMAP)) == 0) // recv file size from slave device
 				{
 					perror("failed to recv file size from slave device\n");
 				}
-                file_size = (size_t)file_size;
-                // for testing
-                file_size = 826;
 				printf("file_size is %zu\n", file_size);
 				// dst = mmap(NULL, file_size, PROT_READ|PROT_WRITE, MAP_SHARED, file_fd, 0);
 				// char *tmp = dst;
@@ -111,6 +108,9 @@ int main (int argc, char* argv[])
                 // expand the file size
                 ftruncate(file_fd, file_size);
 
+				printf("file_size received is %zu\n", file_size);
+				dst = mmap(NULL, file_size, PROT_READ|PROT_WRITE, MAP_SHARED, file_fd, pageoff);
+				char *tmp = dst;
 				while(pageoff < file_size)
 				{
                     dst = mmap(NULL, PAGE_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, file_fd, pageoff);

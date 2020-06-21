@@ -164,10 +164,8 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 		case slave_IOCTL_MMAP: ;
 			char buf[20];
 			krecv(sockfd_cli, buf, sizeof(buf), 0);
-			printk("The received file's size is %s bytes\n", buf);
-			sscanf(buf, "%ld", &ret); 
-            // kstrtol(buf, 10, &ret);
-			printk("ret = %ld\n", ret);
+			sscanf(buf, "%ld", &ret);
+			printk("The received file's size is %ld bytes\n", ret);
 			break;
 
 		case slave_IOCTL_EXIT:
