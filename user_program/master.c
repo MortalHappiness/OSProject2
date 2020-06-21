@@ -53,6 +53,7 @@ int main (int argc, char* argv[])
     // Now, for each file I create a socket.
     // Maybe we need to consider how to transmit all files with single socket.
 
+    gettimeofday(&start ,NULL);
     for (int i = 2; n_files > 0; ++i, --n_files)
     {
         file_name = argv[i];
@@ -68,7 +69,6 @@ int main (int argc, char* argv[])
             return 1;
         }
 
-        gettimeofday(&start ,NULL);
         if(ioctl(dev_fd, 0x12345677) == -1) //0x12345677 : create socket and accept the connection from the slave
         {
             perror("ioctl server create socket error\n");
@@ -99,12 +99,12 @@ int main (int argc, char* argv[])
             return 1;
         }
 
-        gettimeofday(&end, NULL);
-        trans_time = (end.tv_sec - start.tv_sec)*1000 + (end.tv_usec - start.tv_usec)*0.0001;
-        printf("Transmission time: %lf ms, File size: %ld bytes\n", trans_time, file_size / 8);
-
         close(file_fd);
     }
+
+    gettimeofday(&end, NULL);
+    trans_time = (end.tv_sec - start.tv_sec)*1000 + (end.tv_usec - start.tv_usec)*0.0001;
+    printf("Transmission time: %lf ms, File size: %ld bytes\n", trans_time, file_size / 8);
 
     close(dev_fd);
     return 0;
