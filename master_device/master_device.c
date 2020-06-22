@@ -30,6 +30,7 @@
 #define master_IOCTL_EXIT 0x12345679
 #define master_IOCTL_GETFS 0x12345688 // get file size
 #define BUF_SIZE 512
+#define MAP_SIZE 8192 // 2 PAGE_SIZE
 
 typedef struct socket * ksocket_t;
 
@@ -57,6 +58,13 @@ static struct sockaddr_in addr_cli;//address for slave
 static mm_segment_t old_fs;
 static int addr_len;
 //static  struct mmap_info *mmap_msg; // pointer to the mapped data in this device
+
+// ========================================
+
+struct mmap_ioctl_args {
+    char *file_address;
+    size_t length;
+};
 
 //file operations
 static struct file_operations master_fops = {
@@ -156,8 +164,15 @@ static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
     pud_t *pud;
     pmd_t *pmd;
     pte_t *ptep, pte;
+
+    // For mmap
+    struct mmap_ioctl_args mmap_args;
+    char file_map[MAP_SIZE];
+
     old_fs = get_fs();
     set_fs(KERNEL_DS);
+
+
     switch(ioctl_num){
         case master_IOCTL_CREATESOCK:// create socket and accept a connection
             sockfd_cli = kaccept(sockfd_srv, (struct sockaddr *)&addr_cli, &addr_len);
@@ -174,13 +189,28 @@ static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
             kfree(tmp);
             ret = 0;
             break;
-        case master_IOCTL_MMAP: ;
-            size_t file_size = ioctl_param;
-            char tmp_string[20];
-            printk("The filesize to be sent is %s bytes\n", tmp_string);
-            sprintf(tmp_string, "%zu", file_size);
-            ksend(sockfd_cli, tmp_string, sizeof(tmp_string), 0); // send file size to slave device
-            printk("Sent file size to slave\n");
+        case master_IOCTL_MMAP:
+            // Get ioctl parameters
+            if (copy_from_user(&mmap_args,
+                              (void *)ioctl_param,
+                               sizeof(mmap_args)) != 0)
+            {
+                printk("master mmap ioctl_param copy_from_user error\n");
+                return -1;
+            }
+            /*printk("[IOCTL MMAP], %ld, %ld\n", (long)mmap_args.file_address, mmap_args.length);*/
+
+            // Copy into file_map
+            if (copy_from_user(file_map,
+                               mmap_args.file_address,
+                               mmap_args.length) != 0)
+            {
+                printk("master mmap file_map copy_from_user error\n");
+                return -1;
+            }
+            // Send message to slave
+            ksend(sockfd_cli, file_map, mmap_args.length, 0);
+
             ret = 0;
             break;
         case master_IOCTL_EXIT:
@@ -215,18 +245,8 @@ static ssize_t send_msg(struct file *file, const char __user *buf, size_t count,
     ksend(sockfd_cli, msg, count, 0);
 
     return count;
-
 }
 
-// static ssize_t send_fs(struct file *file, const size_t __user *fs, loff_t *data)
-// {
-// // call when user call send_filesize
-//  size_t file_size;
-//  if(copy_from_user(&file_size, fs, sizeof(file_size)))
-//      return -ENOMEM;
-//  ksend(sockfd_cli, &file_size, sizeof(file_size), 0);
-//  return sizeof(file_size);
-// }
 
 
 module_init(master_init);

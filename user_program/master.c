@@ -12,10 +12,15 @@
 
 #define PAGE_SIZE 4096
 #define BUF_SIZE 512
+#define MAP_SIZE 8192 // 2 PAGE_SIZE
 #define master_IOCTL_CREATESOCK 0x12345677
 #define master_IOCTL_MMAP 0x12345678
 #define master_IOCTL_EXIT 0x12345679
-//#define master_IOCTL_FILESIZE 0x12345688
+
+struct mmap_ioctl_args {
+    char *file_address;
+    size_t length;
+};
 
 void help_message(); // print the help message
 size_t get_filesize(const char* filename); // get the size of the input file
@@ -26,10 +31,11 @@ int main (int argc, char* argv[])
 {
     char buf[BUF_SIZE];
     int dev_fd, file_fd;// the fd for the device and the fd for the input file
-    size_t ret, file_size, total_file_size = 0, offset = 0, tmp;
+    size_t ret, file_size, total_file_size = 0, offset, length, tmp;
     int n_files;
     char *file_name;
     char *kernel_address = NULL, *file_address = NULL;
+    struct mmap_ioctl_args mmap_args;
     struct timeval start;
     struct timeval end;
     //calulate the time between the device is opened and it is closed
@@ -96,44 +102,40 @@ int main (int argc, char* argv[])
                 }
                 break;
 
-            size_t pageoff = 0, diff = 0;
-            case 'm': ;// mmap
-                char *src;
-                if(ioctl(dev_fd, master_IOCTL_MMAP, file_size) == -1) // Send file size to slave device
+            case 'm': // mmap
+                offset = 0; // Note that offset of mmap must be page aligned
+                while (offset != file_size)
                 {
-                    perror("failed to send file size to slave device\n");
-                    // return 1;
-                }
-                src = mmap(NULL, file_size, PROT_READ|PROT_WRITE, MAP_SHARED, file_fd, 0);
-                char *tmp = src;
-                while(pageoff < file_size)
-                {
-                    // read from file
-                    diff = file_size - pageoff;
+                    if ((length = file_size - offset) > MAP_SIZE)
+                    {
+                        length = MAP_SIZE;
+                    }
 
-                    if(diff > BUF_SIZE)
+                    file_address = mmap(NULL, length,
+                                        PROT_READ, MAP_SHARED,
+                                        file_fd, offset);
+                    if (file_address == MAP_FAILED)
                     {
-                        // read BUF_SIZE bytes each round
-                        memcpy(buf, tmp, BUF_SIZE);
-                        tmp += BUF_SIZE;
-                        pageoff += BUF_SIZE;
-                        // maybe this step can use mmap
-                        write(dev_fd, buf, BUF_SIZE);
+                        perror("master file mmap error\n");
+                        return 1;
                     }
-                    else
+                    mmap_args.file_address = file_address;
+                    mmap_args.length = length;
+
+                    if (ioctl(dev_fd, master_IOCTL_MMAP, &mmap_args) != 0)
                     {
-                        // reset to 0
-                        memset(buf, 0, BUF_SIZE);
-                        // read the remain data
-                        memcpy(buf, tmp, diff);
-                        tmp += diff;
-                        pageoff += diff;
-                        // maybe this step can use mmap
-                        write(dev_fd, buf, diff);
-                        break;
+                        perror("ioctl server mmap error\n");
+                        return 1;
                     }
+                    if (munmap(file_address, length) != 0)
+                    {
+                        perror("master file munmap error\n");
+                        return 1;
+                    }
+
+                    offset += length;
                 }
-                munmap(src, file_size);
+
                 break;
 
             default:
@@ -144,7 +146,7 @@ int main (int argc, char* argv[])
         // end sending data, close the connection
         if(ioctl(dev_fd, master_IOCTL_EXIT) == -1)
         {
-            perror("ioclt server exits error\n");
+            perror("ioctl server exits error\n");
             return 1;
         }
 
