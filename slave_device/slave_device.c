@@ -203,8 +203,9 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 			ret = 0;
 			break;
 		case slave_IOCTL_FILESIZE: ;
-			krecv(sockfd_cli, buf, sizeof(buf), 0);
-			sscanf(buf, "%ld", &ret);
+			char tmp_string[20];	
+			krecv(sockfd_cli, tmp_string, sizeof(tmp_string), 0);
+			sscanf(tmp_string, "%ld", &ret);
 			printk("The received file's size is %ld bytes\n", ret);
 			break;
 		

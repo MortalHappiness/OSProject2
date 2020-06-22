@@ -223,8 +223,8 @@ static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 		case master_IOCTL_FILESIZE: ;
 			size_t file_size = ioctl_param;
 			char tmp_string[20];
-			printk("The filesize to be sent is %s bytes\n", tmp_string);
 			sprintf(tmp_string, "%zu", file_size);
+			printk("The filesize to be sent is %s bytes\n", tmp_string);
 			ksend(sockfd_cli, tmp_string, sizeof(tmp_string), 0); // send file size to slave device
 			printk("Sent file size to slave\n");
 			ret = 0;

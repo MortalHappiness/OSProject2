@@ -132,14 +132,13 @@ int main (int argc, char* argv[])
                 return 1;
         }
 
+        close(file_fd);
         // end sending data, close the connection
         if(ioctl(dev_fd, master_IOCTL_EXIT) == -1)
         {
             perror("ioclt server exits error\n");
             return 1;
         }
-
-        close(file_fd);
     }
 
     close(dev_fd);
