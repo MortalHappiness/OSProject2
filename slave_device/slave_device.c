@@ -30,7 +30,7 @@
 
 
 #define BUF_SIZE 512
-
+#define MAP_SIZE 8192 // 2 PAGE_SIZE
 
 
 
@@ -57,6 +57,13 @@ ssize_t receive_msg(struct file *filp, char *buf, size_t count, loff_t *offp );
 static mm_segment_t old_fs;
 static ksocket_t sockfd_cli;//socket to the master server
 static struct sockaddr_in addr_srv; //address of the master server
+
+// ========================================
+
+struct mmap_ioctl_args {
+    char *file_address;
+    size_t length;
+};
 
 //file operations
 static struct file_operations slave_fops = {
@@ -107,13 +114,14 @@ int slave_open(struct inode *inode, struct file *filp)
 {
     return 0;
 }
+
 static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
 {
     long ret = -EINVAL;
 
     int addr_len ;
     unsigned int i;
-    size_t len, data_size = 0;
+    size_t len;
     char *tmp, ip[20], buf[BUF_SIZE];
     struct page *p_print;
     unsigned char *px;
@@ -123,6 +131,10 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
     pud_t *pud;
     pmd_t *pmd;
     pte_t *ptep, pte;
+
+    // For mmap
+    struct mmap_ioctl_args mmap_args;
+
     old_fs = get_fs();
     set_fs(KERNEL_DS);
 
@@ -161,11 +173,42 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
             printk("kfree(tmp)");
             ret = 0;
             break;
-        case slave_IOCTL_MMAP: ;
-            char buf[20];
-            krecv(sockfd_cli, buf, sizeof(buf), 0);
-            sscanf(buf, "%ld", &ret);
-            printk("The received file's size is %ld bytes\n", ret);
+
+        case slave_IOCTL_MMAP:
+            // Get ioctl parameters
+            if (copy_from_user(&mmap_args,
+                              (void *)ioctl_param,
+                               sizeof(mmap_args)) != 0)
+            {
+                printk("slave mmap ioctl_param copy_from_user error\n");
+                return -1;
+            }
+
+            ret = 0; // This is the offset
+
+            // Assume slave_device know the MAP_SIZE, therefore
+            // mmap_args.length is unused. Maybe this can be change to
+            // only pass single argument(address) to this function.
+
+            // NOTE: Here assume that MAP_SIZE is integer multiple of
+            //       BUF_SIZE for simplicity.
+            do
+            {
+                // Receive message and put it into buffer
+                len = krecv(sockfd_cli, buf, BUF_SIZE, 0);
+
+                // Write into the file map
+                if (copy_to_user(mmap_args.file_address + ret, buf, len) != 0)
+                {
+                    printk("slave mmap file_map copy_to_user error\n");
+                    return -1;
+                }
+
+                ret += len;
+
+            } while (len == BUF_SIZE && ret != MAP_SIZE);
+            printk("[slave device] transmission done, ret = %ld\n", ret);
+
             break;
 
         case slave_IOCTL_EXIT:
@@ -203,20 +246,8 @@ ssize_t receive_msg(struct file *filp, char *buf, size_t count, loff_t *offp )
     return len;
 }
 
-// ssize_t recv_fs(struct file *filp, size_t *buf, loff_t *offp )
-// {
-// //called when user call recv_filesize
-//  size_t file_size;
-//  size_t len;
-//  len = krecv(sockfd_cli, &file_size, sizeof(file_size), 0);
-//  if(copy_to_user(buf, &file_size, len))
-//      return -ENOMEM;
-//  return len;
-// }
-
-
-
 
 module_init(slave_init);
 module_exit(slave_exit);
 MODULE_LICENSE("GPL");
+

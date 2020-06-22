@@ -12,9 +12,15 @@
 
 #define PAGE_SIZE 4096
 #define BUF_SIZE 512
+#define MAP_SIZE 8192 // 2 PAGE_SIZE
 #define slave_IOCTL_CREATESOCK 0x12345677
 #define slave_IOCTL_MMAP 0x12345678
 #define slave_IOCTL_EXIT 0x12345679
+
+struct mmap_ioctl_args {
+    char *file_address;
+    size_t length;
+};
 
 void help_message();
 
@@ -24,9 +30,10 @@ int main (int argc, char* argv[])
 {
     char buf[BUF_SIZE];
     int dev_fd, file_fd;// the fd for the device and the fd for the input file
-    size_t ret, file_size, total_file_size = 0, data_size = -1;
+    size_t ret, file_size, total_file_size = 0, data_size = -1, offset;
     int n_files;
     char *file_name;
+    struct mmap_ioctl_args mmap_args;
     struct timeval start;
     struct timeval end;
     //calulate the time between the device is opened and it is closed
@@ -91,40 +98,55 @@ int main (int argc, char* argv[])
                 }
                 break;
 
-            case 'm': ;//mmap
-                size_t pageoff = 0, diff = 0;
-                char *dst, *src;
-                if((file_size = (size_t)ioctl(dev_fd, slave_IOCTL_MMAP)) == 0) // recv file size from slave device
-                {
-                    perror("failed to recv file size from slave device\n");
-                }
-                printf("file_size received is %zu\n", file_size);
-                dst = mmap(NULL, file_size, PROT_READ|PROT_WRITE, MAP_SHARED, file_fd, pageoff);
-                char *tmp = dst;
-                while(pageoff < file_size)
-                {
-                    // read diff bytes each round
-                    diff = file_size - pageoff;
-                    // maybe we can use mmap instead
-                    read(dev_fd, buf, diff); // read from the device
+            case 'm': //mmap
+                offset = 0; // Note that offset of mmap must be page aligned
 
-                    if(diff > BUF_SIZE)
+                do
+                {
+                    if (ftruncate(file_fd, offset + MAP_SIZE) == -1)
                     {
-                        memcpy(tmp, buf, BUF_SIZE);
-                        tmp += BUF_SIZE;
-                        pageoff += BUF_SIZE;
+                        perror("slave ftruncate error\n");
+                        return 1;
                     }
-                    else
+                    file_address = mmap(NULL, MAP_SIZE,
+                                        PROT_READ | PROT_WRITE, MAP_SHARED,
+                                        file_fd, offset);
+                    if (file_address == MAP_FAILED)
                     {
-                        memcpy(tmp, buf, diff);
-                        tmp += diff;
-                        pageoff += diff;
-                        break;
+                        perror("slave file mmap error\n");
+                        return 1;
                     }
+                    mmap_args.file_address = file_address;
+                    mmap_args.length = MAP_SIZE;
+
+                    ret = ioctl(dev_fd, slave_IOCTL_MMAP, &mmap_args);
+                    if (ret < 0)
+                    {
+                        perror("ioctl client mmap error\n");
+                        return 1;
+                    }
+
+                    if (munmap(file_address, MAP_SIZE) != 0)
+                    {
+                        perror("master file munmap error\n");
+                        return 1;
+                    }
+
+                    // MAP_SIZE is integer multiple of PAGE_SIZE,
+                    // and ret is MAP_SIZE except at EOF,
+                    // so it is safe to update offset by ret
+                    offset += ret;
+                    total_file_size += ret;
+
+                } while (ret == MAP_SIZE);
+
+                if (ftruncate(file_fd, offset) == -1)
+                {
+                    perror("slave ftruncate error\n");
+                    return 1;
                 }
-                munmap(dst, file_size);
+
                 break;
-
 
             default:
                 fprintf(stderr, "Invalid method : %s\n", method);
