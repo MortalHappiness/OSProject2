@@ -103,22 +103,21 @@ int main (int argc, char* argv[])
                     return 1;
                 }
                 printf("file_size received is %zu\n", file_size);
-                while (offset < file_size){
-                    // determine the length of data to be sent in this iteration
-                    if ((file_size - offset) < MMAP_SIZE) len = (file_size - offset);
-                    else len = MMAP_SIZE;
-                    
+                while (1){
                     // if find a way to pass multiple parameters, then we don't need mmap in every iteration
-                    if ((ret = ioctl(dev_fd, slave_IOCTL_MMAP, len)) == -1) {
+                    ret = ioctl(dev_fd, slave_IOCTL_MMAP);
+                    if (ret < 0) {
                         perror("Master ioctl mmap failed!\n");
                         return 1;
 		            }
+                    else if (ret == 0){
+                        break;
+                    }
                     posix_fallocate(file_fd, offset, ret);
                     file_address = mmap(NULL, ret, PROT_READ, MAP_SHARED, file_fd, offset); // mmap for file
                     kernel_address = mmap(NULL, ret, PROT_WRITE, MAP_SHARED, dev_fd, 0); // mmap for device 
                     memcpy(file_address, kernel_address, ret);
                     offset += ret;
-                    //if (ret != len) printf("ret != len!/n");
                     munmap(kernel_address, ret);
                     munmap(file_address, ret);
                 }
