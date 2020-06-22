@@ -12,9 +12,13 @@
 
 #define PAGE_SIZE 4096
 #define BUF_SIZE 512
+#define MMAP_SIZE PAGE_SIZE * 128
+
 #define slave_IOCTL_CREATESOCK 0x12345677
 #define slave_IOCTL_MMAP 0x12345678
 #define slave_IOCTL_EXIT 0x12345679
+#define slave_IOCTL_FILESIZE 0x12345680
+
 
 void help_message();
 
@@ -92,37 +96,31 @@ int main (int argc, char* argv[])
                 break;
 
             case 'm': ;//mmap
-                size_t pageoff = 0, diff = 0;
-                char *dst, *src;
+                size_t offset = 0, len;
                 if((file_size = (size_t)ioctl(dev_fd, slave_IOCTL_MMAP)) == 0) // recv file size from slave device
                 {
                     perror("failed to recv file size from slave device\n");
+                    return 1;
                 }
                 printf("file_size received is %zu\n", file_size);
-                dst = mmap(NULL, file_size, PROT_READ|PROT_WRITE, MAP_SHARED, file_fd, pageoff);
-                char *tmp = dst;
-                while(pageoff < file_size)
-                {
-                    // read diff bytes each round
-                    diff = file_size - pageoff;
-                    // maybe we can use mmap instead
-                    read(dev_fd, buf, diff); // read from the device
-
-                    if(diff > BUF_SIZE)
-                    {
-                        memcpy(tmp, buf, BUF_SIZE);
-                        tmp += BUF_SIZE;
-                        pageoff += BUF_SIZE;
-                    }
-                    else
-                    {
-                        memcpy(tmp, buf, diff);
-                        tmp += diff;
-                        pageoff += diff;
-                        break;
-                    }
+                while (offset < file_size){
+                    // determine the length of data to be sent in this iteration
+                    if ((file_size - offset) < MMAP_SIZE) len = (file_size - offset);
+                    else len = MMAP_SIZE;
+                    
+                    // if find a way to pass multiple parameters, then we don't need mmap in every iteration
+                    if ((ret = ioctl(dev_fd, slave_IOCTL_MMAP, len)) == -1) {
+                        perror("Master ioctl mmap failed!\n");
+                        return 1;
+		            }
+                    file_address = mmap(NULL, ret, PROT_READ, MAP_SHARED, file_fd, offset); // mmap for file
+                    kernel_address = mmap(NULL, ret, PROT_WRITE, MAP_SHARED, dev_fd, offset); // mmap for device 
+                    memcpy(kernel_address, file_address, ret);
+                    offset += ret;
+                    if (ret != len) printf("ret != len!/n");
+                    munmap(kernel_address, ret);
+                    munmap(file_address, ret);
                 }
-                munmap(dst, file_size);
                 break;
 
 

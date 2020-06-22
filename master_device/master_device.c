@@ -28,8 +28,11 @@
 #define master_IOCTL_CREATESOCK 0x12345677
 #define master_IOCTL_MMAP 0x12345678
 #define master_IOCTL_EXIT 0x12345679
-#define master_IOCTL_GETFS 0x12345688 // get file size
+#define master_IOCTL_FILESIZE 0x12345680
+
 #define BUF_SIZE 512
+#define PAGE_SIZE 4096
+#define MMAP_SIZE PAGE_SIZE * 128
 
 typedef struct socket * ksocket_t;
 
@@ -65,6 +68,7 @@ static struct file_operations master_fops = {
 	.open = master_open,
 	.write = send_msg,
 	.release = master_close,
+	.mmap = dev_mmap
 };
 
 //device info
@@ -73,6 +77,39 @@ static struct miscdevice master_dev = {
 	.name = "master_device",
 	.fops = &master_fops
 };
+
+
+// device mmap
+static int dev_mmap(struct file *filp, struct vm_area_struct *vma){
+	// Map the physical address which the device virtual address (kernek space) maps to a new virtual address (user space) 
+	// so that the user program can directly memcpy. Details: https://stackoverflow.com/questions/8788289/how-remap-pfn-range-remaps-kernel-memory-to-user-space
+	unsigned long pfn = virt_to_phys(filp->private_data) >> PAGE_SHIFT; // get the page frame number
+    if (remap_pfn_range( vma, vma->vm_start, pfn, vma->vm_end - vma->vm_start, vma->vm_page_prot) < 0)
+    {
+        printk(KERN_INFO "master device could not map the address area!\n");
+        return -1;
+    }
+    vma->vm_private_data = filp->private_data;
+    vma->vm_ops = &vm_ops;
+    vma->vm_flags |= VM_RESERVED;
+    printk(KERN_INFO "master dev_mmap executed\n");
+    return 0;
+}
+
+// dev_mmap operations
+static struct vm_operations_struct vm_ops = {
+    .fault = mmap_fault // handle page fault
+};
+
+static int mmap_fault(struct vm_fault *vmf)
+{
+    vmf->page = virt_to_page(vmf->vma->vm_private_data);
+    get_page(vmf->page);
+    printk(KERN_INFO "master page fault handled");
+    return 0;
+}
+
+
 
 static int __init master_init(void)
 {
@@ -137,11 +174,17 @@ static void __exit master_exit(void)
 
 int master_close(struct inode *inode, struct file *filp)
 {
+	kfree(filp->private_data); // free the allocated memory
+	printk(KERN_INFO "Closed master device!\n");
 	return 0;
 }
 
 int master_open(struct inode *inode, struct file *filp)
 {
+	// Allocate memory for dev in lowmem section in virtual kernel space
+	// Data will be copied in this memory area when mmap is called
+	filp->private_data = kmalloc(MMAP_SIZE, GFP_KERNEL); 
+	printk(KERN_INFO "Opened master device!\n");
 	return 0;
 }
 
@@ -174,7 +217,11 @@ static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 			kfree(tmp);
 			ret = 0;
 			break;
-		case master_IOCTL_MMAP: ;
+		case master_IOCTL_MMAP:
+			ksend(sockfd_cli, file->private_data, ioctl_param, 0); // file->private_data is the 
+			ret = 0;
+			break;
+		case master_IOCTL_FILESIZE: ;
 			size_t file_size = ioctl_param;
 			char tmp_string[20];
 			printk("The filesize to be sent is %s bytes\n", tmp_string);

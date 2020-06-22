@@ -27,10 +27,11 @@
 #define slave_IOCTL_CREATESOCK 0x12345677
 #define slave_IOCTL_MMAP 0x12345678
 #define slave_IOCTL_EXIT 0x12345679
-
+#define slave_IOCTL_FILESIZE 0x12345680
 
 #define BUF_SIZE 512
-
+#define PAGE_SIZE 4096
+#define MMAP_SIZE PAGE_SIZE * 128
 
 
 
@@ -64,7 +65,8 @@ static struct file_operations slave_fops = {
 	.unlocked_ioctl = slave_ioctl,
 	.open = slave_open,
 	.read = receive_msg,
-	.release = slave_close
+	.release = slave_close,
+	.mmap = dev_mmap
 };
 
 //device info
@@ -73,6 +75,36 @@ static struct miscdevice slave_dev = {
 	.name = "slave_device",
 	.fops = &slave_fops
 };
+
+// device mmap
+static int dev_mmap(struct file *filp, struct vm_area_struct *vma){
+	// Map the physical address which the device virtual address (kernek space) maps to a new virtual address (user space) 
+	// so that the user program can directly memcpy. Details: https://stackoverflow.com/questions/8788289/how-remap-pfn-range-remaps-kernel-memory-to-user-space
+	unsigned long pfn = virt_to_phys(filp->private_data) >> PAGE_SHIFT; // get the page frame number
+    if (remap_pfn_range( vma, vma->vm_start, pfn, vma->vm_end - vma->vm_start, vma->vm_page_prot) < 0)
+    {
+        printk(KERN_INFO "master device could not map the address area!\n");
+        return -1;
+    }
+    vma->vm_private_data = filp->private_data;
+    vma->vm_ops = &vm_ops;
+    vma->vm_flags |= VM_RESERVED;
+    printk(KERN_INFO "master dev_mmap executed\n");
+    return 0;
+}
+
+// dev_mmap operations
+static struct vm_operations_struct vm_ops = {
+    .fault = mmap_fault // handle page fault
+};
+
+static int mmap_fault(struct vm_fault *vmf)
+{
+    vmf->page = virt_to_page(vmf->vma->vm_private_data);
+    get_page(vmf->page);
+    printk(KERN_INFO "slave page fault handled");
+    return 0;
+}
 
 static int __init slave_init(void)
 {
@@ -100,13 +132,20 @@ static void __exit slave_exit(void)
 
 int slave_close(struct inode *inode, struct file *filp)
 {
+	kfree(filp->private_data); // free the allocated memory
+	printk(KERN_INFO "Closed slave device!\n");
 	return 0;
 }
 
 int slave_open(struct inode *inode, struct file *filp)
 {
+	// Allocate memory for dev in lowmem section in virtual kernel space
+	// Data will be copied in this memory area when mmap is called
+	filp->private_data = kmalloc(MMAP_SIZE, GFP_KERNEL); 
+	printk(KERN_INFO "Opened slave device!\n");
 	return 0;
 }
+
 static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
 {
 	long ret = -EINVAL;
@@ -161,11 +200,22 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 			printk("kfree(tmp)");
 			ret = 0;
 			break;
-		case slave_IOCTL_MMAP: ;
-			char buf[20];
+		case slave_IOCTL_FILESIZE: ;
 			krecv(sockfd_cli, buf, sizeof(buf), 0);
 			sscanf(buf, "%ld", &ret);
 			printk("The received file's size is %ld bytes\n", ret);
+			break;
+		
+		case slave_IOCTL_MMAP: ;
+			size_t len;
+			ret = 0;
+			while(1){
+				len = krecv(sockfd_cli, buf, sizeof(buf), 0);
+				if(len == 0) break;
+				memcpy(file->private_data + ret, buf, len);
+                ret += len;
+                if(ret >= ioctl_param) break;
+			}
 			break;
 
 		case slave_IOCTL_EXIT:

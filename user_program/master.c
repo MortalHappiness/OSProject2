@@ -12,9 +12,12 @@
 
 #define PAGE_SIZE 4096
 #define BUF_SIZE 512
+#define MMAP_SIZE PAGE_SIZE * 128
+
 #define master_IOCTL_CREATESOCK 0x12345677
 #define master_IOCTL_MMAP 0x12345678
 #define master_IOCTL_EXIT 0x12345679
+#define master_IOCTL_FILESIZE 0x12345680
 //#define master_IOCTL_FILESIZE 0x12345688
 
 void help_message(); // print the help message
@@ -96,44 +99,32 @@ int main (int argc, char* argv[])
                 }
                 break;
 
-            size_t pageoff = 0, diff = 0;
             case 'm': ;// mmap
-                char *src;
-                if(ioctl(dev_fd, master_IOCTL_MMAP, file_size) == -1) // Send file size to slave device
+                offset = 0; // current position in the file
+                size_t len;
+                // Send file size to slave device
+                if(ioctl(dev_fd, master_IOCTL_FILESIZE, file_size) == -1) 
                 {
                     perror("failed to send file size to slave device\n");
-                    // return 1;
+                    return 1;
                 }
-                src = mmap(NULL, file_size, PROT_READ|PROT_WRITE, MAP_SHARED, file_fd, 0);
-                char *tmp = src;
-                while(pageoff < file_size)
-                {
-                    // read from file
-                    diff = file_size - pageoff;
-
-                    if(diff > BUF_SIZE)
-                    {
-                        // read BUF_SIZE bytes each round
-                        memcpy(buf, tmp, BUF_SIZE);
-                        tmp += BUF_SIZE;
-                        pageoff += BUF_SIZE;
-                        // maybe this step can use mmap
-                        write(dev_fd, buf, BUF_SIZE);
-                    }
-                    else
-                    {
-                        // reset to 0
-                        memset(buf, 0, BUF_SIZE);
-                        // read the remain data
-                        memcpy(buf, tmp, diff);
-                        tmp += diff;
-                        pageoff += diff;
-                        // maybe this step can use mmap
-                        write(dev_fd, buf, diff);
-                        break;
-                    }
+                // Send file to slave
+                while (offset < file_size){
+                    // determine the length of data to be sent in this iteration
+                    if ((file_size - offset) < MMAP_SIZE) len = (file_size - offset);
+                    else len = MMAP_SIZE;
+                    file_address = mmap(NULL,len, PROT_READ, MAP_SHARED, file_fd, offset); // mmap for file
+                    kernel_address = mmap(NULL, len, PROT_WRITE, MAP_SHARED, dev_fd, offset); // mmap for device 
+                    memcpy(kernel_address, file_address, len);
+                    offset += len;
+                    // if find a way to pass multiple parameters, then we don't need mmap in every iteration
+                    if (ioctl(dev_fd, master_IOCTL_MMAP, len) == -1) {
+                        perror("Master ioctl mmap failed!\n");
+                        return 1;
+		            }
+                    munmap(kernel_address, len);
+                    munmap(file_address, len);
                 }
-                munmap(src, file_size);
                 break;
 
             default:
