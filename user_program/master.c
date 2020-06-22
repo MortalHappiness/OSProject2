@@ -133,6 +133,9 @@ int main (int argc, char* argv[])
                         return 1;
                     }
 
+                    // MAP_SIZE is integer multiple of PAGE_SIZE,
+                    // and length is MAP_SIZE except at EOF,
+                    // so it is safe to update offset by length
                     offset += length;
                 }
 
