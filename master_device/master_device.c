@@ -61,21 +61,18 @@ static mm_segment_t old_fs;
 static int addr_len;
 //static  struct mmap_info *mmap_msg; // pointer to the mapped data in this device
 
-//file operations
-static struct file_operations master_fops = {
-	.owner = THIS_MODULE,
-	.unlocked_ioctl = master_ioctl,
-	.open = master_open,
-	.write = send_msg,
-	.release = master_close,
-	.mmap = dev_mmap
-};
+static int mmap_fault(struct vm_fault *vmf)
+{
+    vmf->page = virt_to_page(vmf->vma->vm_private_data);
+    get_page(vmf->page);
+    printk(KERN_INFO "master page fault handled");
+    return 0;
+}
 
-//device info
-static struct miscdevice master_dev = {
-	.minor = MISC_DYNAMIC_MINOR,
-	.name = "master_device",
-	.fops = &master_fops
+
+// dev_mmap operations
+static struct vm_operations_struct vm_ops = {
+    .fault = mmap_fault // handle page fault
 };
 
 
@@ -96,19 +93,22 @@ static int dev_mmap(struct file *filp, struct vm_area_struct *vma){
     return 0;
 }
 
-// dev_mmap operations
-static struct vm_operations_struct vm_ops = {
-    .fault = mmap_fault // handle page fault
+//file operations
+static struct file_operations master_fops = {
+	.owner = THIS_MODULE,
+	.unlocked_ioctl = master_ioctl,
+	.open = master_open,
+	.write = send_msg,
+	.release = master_close,
+	.mmap = dev_mmap
 };
 
-static int mmap_fault(struct vm_fault *vmf)
-{
-    vmf->page = virt_to_page(vmf->vma->vm_private_data);
-    get_page(vmf->page);
-    printk(KERN_INFO "master page fault handled");
-    return 0;
-}
-
+//device info
+static struct miscdevice master_dev = {
+	.minor = MISC_DYNAMIC_MINOR,
+	.name = "master_device",
+	.fops = &master_fops
+};
 
 
 static int __init master_init(void)

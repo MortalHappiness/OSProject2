@@ -59,21 +59,18 @@ static mm_segment_t old_fs;
 static ksocket_t sockfd_cli;//socket to the master server
 static struct sockaddr_in addr_srv; //address of the master server
 
-//file operations
-static struct file_operations slave_fops = {
-	.owner = THIS_MODULE,
-	.unlocked_ioctl = slave_ioctl,
-	.open = slave_open,
-	.read = receive_msg,
-	.release = slave_close,
-	.mmap = dev_mmap
-};
 
-//device info
-static struct miscdevice slave_dev = {
-	.minor = MISC_DYNAMIC_MINOR,
-	.name = "slave_device",
-	.fops = &slave_fops
+static int mmap_fault(struct vm_fault *vmf)
+{
+    vmf->page = virt_to_page(vmf->vma->vm_private_data);
+    get_page(vmf->page);
+    printk(KERN_INFO "slave page fault handled");
+    return 0;
+}
+
+// dev_mmap operations
+static struct vm_operations_struct vm_ops = {
+    .fault = mmap_fault // handle page fault
 };
 
 // device mmap
@@ -93,18 +90,24 @@ static int dev_mmap(struct file *filp, struct vm_area_struct *vma){
     return 0;
 }
 
-// dev_mmap operations
-static struct vm_operations_struct vm_ops = {
-    .fault = mmap_fault // handle page fault
+
+//file operations
+static struct file_operations slave_fops = {
+	.owner = THIS_MODULE,
+	.unlocked_ioctl = slave_ioctl,
+	.open = slave_open,
+	.read = receive_msg,
+	.release = slave_close,
+	.mmap = dev_mmap
 };
 
-static int mmap_fault(struct vm_fault *vmf)
-{
-    vmf->page = virt_to_page(vmf->vma->vm_private_data);
-    get_page(vmf->page);
-    printk(KERN_INFO "slave page fault handled");
-    return 0;
-}
+//device info
+static struct miscdevice slave_dev = {
+	.minor = MISC_DYNAMIC_MINOR,
+	.name = "slave_device",
+	.fops = &slave_fops
+};
+
 
 static int __init slave_init(void)
 {
