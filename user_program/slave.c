@@ -113,11 +113,12 @@ int main (int argc, char* argv[])
                         perror("Master ioctl mmap failed!\n");
                         return 1;
 		            }
+                    posix_fallocate(file_fd, offset, ret);
                     file_address = mmap(NULL, ret, PROT_READ, MAP_SHARED, file_fd, offset); // mmap for file
-                    kernel_address = mmap(NULL, ret, PROT_WRITE, MAP_SHARED, dev_fd, offset); // mmap for device 
-                    memcpy(kernel_address, file_address, ret);
+                    kernel_address = mmap(NULL, ret, PROT_WRITE, MAP_SHARED, dev_fd, 0); // mmap for device 
+                    memcpy(file_address, kernel_address, ret);
                     offset += ret;
-                    if (ret != len) printf("ret != len!/n");
+                    //if (ret != len) printf("ret != len!/n");
                     munmap(kernel_address, ret);
                     munmap(file_address, ret);
                 }
