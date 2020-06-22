@@ -60,158 +60,158 @@ static struct sockaddr_in addr_srv; //address of the master server
 
 //file operations
 static struct file_operations slave_fops = {
-	.owner = THIS_MODULE,
-	.unlocked_ioctl = slave_ioctl,
-	.open = slave_open,
-	.read = receive_msg,
-	.release = slave_close
+    .owner = THIS_MODULE,
+    .unlocked_ioctl = slave_ioctl,
+    .open = slave_open,
+    .read = receive_msg,
+    .release = slave_close
 };
 
 //device info
 static struct miscdevice slave_dev = {
-	.minor = MISC_DYNAMIC_MINOR,
-	.name = "slave_device",
-	.fops = &slave_fops
+    .minor = MISC_DYNAMIC_MINOR,
+    .name = "slave_device",
+    .fops = &slave_fops
 };
 
 static int __init slave_init(void)
 {
-	int ret;
-	file1 = debugfs_create_file("slave_debug", 0644, NULL, NULL, &slave_fops);
+    int ret;
+    file1 = debugfs_create_file("slave_debug", 0644, NULL, NULL, &slave_fops);
 
-	//register the device
-	if( (ret = misc_register(&slave_dev)) < 0){
-		printk(KERN_ERR "misc_register failed!\n");
-		return ret;
-	}
+    //register the device
+    if( (ret = misc_register(&slave_dev)) < 0){
+        printk(KERN_ERR "misc_register failed!\n");
+        return ret;
+    }
 
-	printk(KERN_INFO "slave has been registered!\n");
+    printk(KERN_INFO "slave has been registered!\n");
 
-	return 0;
+    return 0;
 }
 
 static void __exit slave_exit(void)
 {
-	misc_deregister(&slave_dev);
-	printk(KERN_INFO "slave exited!\n");
-	debugfs_remove(file1);
+    misc_deregister(&slave_dev);
+    printk(KERN_INFO "slave exited!\n");
+    debugfs_remove(file1);
 }
 
 
 int slave_close(struct inode *inode, struct file *filp)
 {
-	return 0;
+    return 0;
 }
 
 int slave_open(struct inode *inode, struct file *filp)
 {
-	return 0;
+    return 0;
 }
 static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
 {
-	long ret = -EINVAL;
+    long ret = -EINVAL;
 
-	int addr_len ;
-	unsigned int i;
-	size_t len, data_size = 0;
-	char *tmp, ip[20], buf[BUF_SIZE];
-	struct page *p_print;
-	unsigned char *px;
+    int addr_len ;
+    unsigned int i;
+    size_t len, data_size = 0;
+    char *tmp, ip[20], buf[BUF_SIZE];
+    struct page *p_print;
+    unsigned char *px;
 
     pgd_t *pgd;
-	p4d_t *p4d;
-	pud_t *pud;
-	pmd_t *pmd;
+    p4d_t *p4d;
+    pud_t *pud;
+    pmd_t *pmd;
     pte_t *ptep, pte;
-	old_fs = get_fs();
-	set_fs(KERNEL_DS);
+    old_fs = get_fs();
+    set_fs(KERNEL_DS);
 
     printk("slave device ioctl");
 
-	switch(ioctl_num){
-		case slave_IOCTL_CREATESOCK:// create socket and connect to master
+    switch(ioctl_num){
+        case slave_IOCTL_CREATESOCK:// create socket and connect to master
             printk("slave device ioctl create socket");
 
-			if(copy_from_user(ip, (char*)ioctl_param, sizeof(ip)))
-				return -ENOMEM;
+            if(copy_from_user(ip, (char*)ioctl_param, sizeof(ip)))
+                return -ENOMEM;
 
-			sprintf(current->comm, "ksktcli");
+            sprintf(current->comm, "ksktcli");
 
-			memset(&addr_srv, 0, sizeof(addr_srv));
-			addr_srv.sin_family = AF_INET;
-			addr_srv.sin_port = htons(2325);
-			addr_srv.sin_addr.s_addr = inet_addr(ip);
-			addr_len = sizeof(struct sockaddr_in);
+            memset(&addr_srv, 0, sizeof(addr_srv));
+            addr_srv.sin_family = AF_INET;
+            addr_srv.sin_port = htons(2325);
+            addr_srv.sin_addr.s_addr = inet_addr(ip);
+            addr_len = sizeof(struct sockaddr_in);
 
-			sockfd_cli = ksocket(AF_INET, SOCK_STREAM, 0);
-			printk("sockfd_cli = 0x%p  socket is created\n", sockfd_cli);
-			if (sockfd_cli == NULL)
-			{
-				printk("socket failed\n");
-				return -1;
-			}
-			if (kconnect(sockfd_cli, (struct sockaddr*)&addr_srv, addr_len) < 0)
-			{
-				printk("connect failed\n");
-				return -1;
-			}
-			tmp = inet_ntoa(&addr_srv.sin_addr);
-			printk("connected to : %s %d\n", tmp, ntohs(addr_srv.sin_port));
-			kfree(tmp);
-			printk("kfree(tmp)");
-			ret = 0;
-			break;
-		case slave_IOCTL_MMAP: ;
-			char buf[20];
-			krecv(sockfd_cli, buf, sizeof(buf), 0);
-			sscanf(buf, "%ld", &ret);
-			printk("The received file's size is %ld bytes\n", ret);
-			break;
+            sockfd_cli = ksocket(AF_INET, SOCK_STREAM, 0);
+            printk("sockfd_cli = 0x%p  socket is created\n", sockfd_cli);
+            if (sockfd_cli == NULL)
+            {
+                printk("socket failed\n");
+                return -1;
+            }
+            if (kconnect(sockfd_cli, (struct sockaddr*)&addr_srv, addr_len) < 0)
+            {
+                printk("connect failed\n");
+                return -1;
+            }
+            tmp = inet_ntoa(&addr_srv.sin_addr);
+            printk("connected to : %s %d\n", tmp, ntohs(addr_srv.sin_port));
+            kfree(tmp);
+            printk("kfree(tmp)");
+            ret = 0;
+            break;
+        case slave_IOCTL_MMAP: ;
+            char buf[20];
+            krecv(sockfd_cli, buf, sizeof(buf), 0);
+            sscanf(buf, "%ld", &ret);
+            printk("The received file's size is %ld bytes\n", ret);
+            break;
 
-		case slave_IOCTL_EXIT:
-			if(kclose(sockfd_cli) == -1)
-			{
-				printk("kclose cli error\n");
-				return -1;
-			}
-			ret = 0;
-			break;
-		default:
+        case slave_IOCTL_EXIT:
+            if(kclose(sockfd_cli) == -1)
+            {
+                printk("kclose cli error\n");
+                return -1;
+            }
+            ret = 0;
+            break;
+        default:
             pgd = pgd_offset(current->mm, ioctl_param);
-			p4d = p4d_offset(pgd, ioctl_param);
-			pud = pud_offset(p4d, ioctl_param);
-			pmd = pmd_offset(pud, ioctl_param);
-			ptep = pte_offset_kernel(pmd , ioctl_param);
-			pte = *ptep;
-			printk("slave: %lX\n", pte);
-			ret = 0;
-			break;
-	}
+            p4d = p4d_offset(pgd, ioctl_param);
+            pud = pud_offset(p4d, ioctl_param);
+            pmd = pmd_offset(pud, ioctl_param);
+            ptep = pte_offset_kernel(pmd , ioctl_param);
+            pte = *ptep;
+            printk("slave: %lX\n", pte);
+            ret = 0;
+            break;
+    }
     set_fs(old_fs);
 
-	return ret;
+    return ret;
 }
 
 ssize_t receive_msg(struct file *filp, char *buf, size_t count, loff_t *offp )
 {
 //called when user is reading from this device
-	char msg[BUF_SIZE];
-	size_t len;
-	len = krecv(sockfd_cli, msg, sizeof(msg), 0);
-	if(copy_to_user(buf, msg, len))
-		return -ENOMEM;
-	return len;
+    char msg[BUF_SIZE];
+    size_t len;
+    len = krecv(sockfd_cli, msg, sizeof(msg), 0);
+    if(copy_to_user(buf, msg, len))
+        return -ENOMEM;
+    return len;
 }
 
 // ssize_t recv_fs(struct file *filp, size_t *buf, loff_t *offp )
 // {
 // //called when user call recv_filesize
-// 	size_t file_size;
-// 	size_t len;
-// 	len = krecv(sockfd_cli, &file_size, sizeof(file_size), 0);
-// 	if(copy_to_user(buf, &file_size, len))
-// 		return -ENOMEM;
-// 	return len;
+//  size_t file_size;
+//  size_t len;
+//  len = krecv(sockfd_cli, &file_size, sizeof(file_size), 0);
+//  if(copy_to_user(buf, &file_size, len))
+//      return -ENOMEM;
+//  return len;
 // }
 
 

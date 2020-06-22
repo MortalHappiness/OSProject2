@@ -60,172 +60,172 @@ static int addr_len;
 
 //file operations
 static struct file_operations master_fops = {
-	.owner = THIS_MODULE,
-	.unlocked_ioctl = master_ioctl,
-	.open = master_open,
-	.write = send_msg,
-	.release = master_close,
+    .owner = THIS_MODULE,
+    .unlocked_ioctl = master_ioctl,
+    .open = master_open,
+    .write = send_msg,
+    .release = master_close,
 };
 
 //device info
 static struct miscdevice master_dev = {
-	.minor = MISC_DYNAMIC_MINOR,
-	.name = "master_device",
-	.fops = &master_fops
+    .minor = MISC_DYNAMIC_MINOR,
+    .name = "master_device",
+    .fops = &master_fops
 };
 
 static int __init master_init(void)
 {
-	int ret;
-	file1 = debugfs_create_file("master_debug", 0644, NULL, NULL, &master_fops);
+    int ret;
+    file1 = debugfs_create_file("master_debug", 0644, NULL, NULL, &master_fops);
 
-	//register the device
-	if( (ret = misc_register(&master_dev)) < 0){
-		printk(KERN_ERR "misc_register failed!\n");
-		return ret;
-	}
+    //register the device
+    if( (ret = misc_register(&master_dev)) < 0){
+        printk(KERN_ERR "misc_register failed!\n");
+        return ret;
+    }
 
-	printk(KERN_INFO "master has been registered!\n");
+    printk(KERN_INFO "master has been registered!\n");
 
-	old_fs = get_fs();
-	set_fs(KERNEL_DS);
+    old_fs = get_fs();
+    set_fs(KERNEL_DS);
 
-	//initialize the master server
-	sockfd_srv = sockfd_cli = NULL;
-	memset(&addr_cli, 0, sizeof(addr_cli));
-	memset(&addr_srv, 0, sizeof(addr_srv));
-	addr_srv.sin_family = AF_INET;
-	addr_srv.sin_port = htons(DEFAULT_PORT);
-	addr_srv.sin_addr.s_addr = INADDR_ANY;
-	addr_len = sizeof(struct sockaddr_in);
+    //initialize the master server
+    sockfd_srv = sockfd_cli = NULL;
+    memset(&addr_cli, 0, sizeof(addr_cli));
+    memset(&addr_srv, 0, sizeof(addr_srv));
+    addr_srv.sin_family = AF_INET;
+    addr_srv.sin_port = htons(DEFAULT_PORT);
+    addr_srv.sin_addr.s_addr = INADDR_ANY;
+    addr_len = sizeof(struct sockaddr_in);
 
-	sockfd_srv = ksocket(AF_INET, SOCK_STREAM, 0);
-	printk("sockfd_srv = 0x%p  socket is created \n", sockfd_srv);
-	if (sockfd_srv == NULL)
-	{
-		printk("socket failed\n");
-		return -1;
-	}
-	if (kbind(sockfd_srv, (struct sockaddr *)&addr_srv, addr_len) < 0)
-	{
-		printk("bind failed\n");
-		return -1;
-	}
-	if (klisten(sockfd_srv, 10) < 0)
-	{
-		printk("listen failed\n");
-		return -1;
-	}
+    sockfd_srv = ksocket(AF_INET, SOCK_STREAM, 0);
+    printk("sockfd_srv = 0x%p  socket is created \n", sockfd_srv);
+    if (sockfd_srv == NULL)
+    {
+        printk("socket failed\n");
+        return -1;
+    }
+    if (kbind(sockfd_srv, (struct sockaddr *)&addr_srv, addr_len) < 0)
+    {
+        printk("bind failed\n");
+        return -1;
+    }
+    if (klisten(sockfd_srv, 10) < 0)
+    {
+        printk("listen failed\n");
+        return -1;
+    }
     printk("master_device init OK\n");
-	set_fs(old_fs);
-	return 0;
+    set_fs(old_fs);
+    return 0;
 }
 
 static void __exit master_exit(void)
 {
-	misc_deregister(&master_dev);
+    misc_deregister(&master_dev);
     printk("misc_deregister\n");
-	if(kclose(sockfd_srv) == -1)
-	{
-		printk("kclose srv error\n");
-		return ;
-	}
-	set_fs(old_fs);
-	printk(KERN_INFO "master exited!\n");
-	debugfs_remove(file1);
+    if(kclose(sockfd_srv) == -1)
+    {
+        printk("kclose srv error\n");
+        return ;
+    }
+    set_fs(old_fs);
+    printk(KERN_INFO "master exited!\n");
+    debugfs_remove(file1);
 }
 
 int master_close(struct inode *inode, struct file *filp)
 {
-	return 0;
+    return 0;
 }
 
 int master_open(struct inode *inode, struct file *filp)
 {
-	return 0;
+    return 0;
 }
 
 
 static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
 {
-	long ret = -EINVAL;
-	size_t data_size = 0, offset = 0;
-	char *tmp;
-	pgd_t *pgd;
-	p4d_t *p4d;
-	pud_t *pud;
-	pmd_t *pmd;
+    long ret = -EINVAL;
+    size_t data_size = 0, offset = 0;
+    char *tmp;
+    pgd_t *pgd;
+    p4d_t *p4d;
+    pud_t *pud;
+    pmd_t *pmd;
     pte_t *ptep, pte;
-	old_fs = get_fs();
-	set_fs(KERNEL_DS);
-	switch(ioctl_num){
-		case master_IOCTL_CREATESOCK:// create socket and accept a connection
-			sockfd_cli = kaccept(sockfd_srv, (struct sockaddr *)&addr_cli, &addr_len);
-			if (sockfd_cli == NULL)
-			{
-				printk("accept failed\n");
-				return -1;
-			}
-			else
-				printk("aceept sockfd_cli = 0x%p\n", sockfd_cli);
+    old_fs = get_fs();
+    set_fs(KERNEL_DS);
+    switch(ioctl_num){
+        case master_IOCTL_CREATESOCK:// create socket and accept a connection
+            sockfd_cli = kaccept(sockfd_srv, (struct sockaddr *)&addr_cli, &addr_len);
+            if (sockfd_cli == NULL)
+            {
+                printk("accept failed\n");
+                return -1;
+            }
+            else
+                printk("aceept sockfd_cli = 0x%p\n", sockfd_cli);
 
-			tmp = inet_ntoa(&addr_cli.sin_addr);
-			printk("got connected from : %s %d\n", tmp, ntohs(addr_cli.sin_port));
-			kfree(tmp);
-			ret = 0;
-			break;
-		case master_IOCTL_MMAP: ;
-			size_t file_size = ioctl_param;
-			char tmp_string[20];
-			printk("The filesize to be sent is %s bytes\n", tmp_string);
-			sprintf(tmp_string, "%zu", file_size);
-			ksend(sockfd_cli, tmp_string, sizeof(tmp_string), 0); // send file size to slave device
-			printk("Sent file size to slave\n");
-			ret = 0;
-			break;
-		case master_IOCTL_EXIT:
-			if(kclose(sockfd_cli) == -1)
-			{
-				printk("kclose cli error\n");
-				return -1;
-			}
-			ret = 0;
-			break;
-		default:
-			pgd = pgd_offset(current->mm, ioctl_param);
-			p4d = p4d_offset(pgd, ioctl_param);
-			pud = pud_offset(p4d, ioctl_param);
-			pmd = pmd_offset(pud, ioctl_param);
-			ptep = pte_offset_kernel(pmd , ioctl_param);
-			pte = *ptep;
-			printk("master: %lX\n", pte);
-			ret = 0;
-			break;
-	}
+            tmp = inet_ntoa(&addr_cli.sin_addr);
+            printk("got connected from : %s %d\n", tmp, ntohs(addr_cli.sin_port));
+            kfree(tmp);
+            ret = 0;
+            break;
+        case master_IOCTL_MMAP: ;
+            size_t file_size = ioctl_param;
+            char tmp_string[20];
+            printk("The filesize to be sent is %s bytes\n", tmp_string);
+            sprintf(tmp_string, "%zu", file_size);
+            ksend(sockfd_cli, tmp_string, sizeof(tmp_string), 0); // send file size to slave device
+            printk("Sent file size to slave\n");
+            ret = 0;
+            break;
+        case master_IOCTL_EXIT:
+            if(kclose(sockfd_cli) == -1)
+            {
+                printk("kclose cli error\n");
+                return -1;
+            }
+            ret = 0;
+            break;
+        default:
+            pgd = pgd_offset(current->mm, ioctl_param);
+            p4d = p4d_offset(pgd, ioctl_param);
+            pud = pud_offset(p4d, ioctl_param);
+            pmd = pmd_offset(pud, ioctl_param);
+            ptep = pte_offset_kernel(pmd , ioctl_param);
+            pte = *ptep;
+            printk("master: %lX\n", pte);
+            ret = 0;
+            break;
+    }
 
-	set_fs(old_fs);
-	return ret;
+    set_fs(old_fs);
+    return ret;
 }
 static ssize_t send_msg(struct file *file, const char __user *buf, size_t count, loff_t *data)
 {
 //call when user is writing to this device
-	char msg[BUF_SIZE];
-	if(copy_from_user(msg, buf, count))
-		return -ENOMEM;
-	ksend(sockfd_cli, msg, count, 0);
+    char msg[BUF_SIZE];
+    if(copy_from_user(msg, buf, count))
+        return -ENOMEM;
+    ksend(sockfd_cli, msg, count, 0);
 
-	return count;
+    return count;
 
 }
 
 // static ssize_t send_fs(struct file *file, const size_t __user *fs, loff_t *data)
 // {
 // // call when user call send_filesize
-// 	size_t file_size;
-// 	if(copy_from_user(&file_size, fs, sizeof(file_size)))
-// 		return -ENOMEM;
-// 	ksend(sockfd_cli, &file_size, sizeof(file_size), 0);
-// 	return sizeof(file_size);
+//  size_t file_size;
+//  if(copy_from_user(&file_size, fs, sizeof(file_size)))
+//      return -ENOMEM;
+//  ksend(sockfd_cli, &file_size, sizeof(file_size), 0);
+//  return sizeof(file_size);
 // }
 
 
