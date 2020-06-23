@@ -66,10 +66,6 @@ int main (int argc, char* argv[])
         return 1;
     }
 
-    // TODO:
-    // Now, for each file I create a socket.
-    // Maybe we need to consider how to transmit all files with single socket.
-
     for (int i = 2; n_files > 0; ++i, --n_files)
     {
         file_name = argv[i];
@@ -77,14 +73,14 @@ int main (int argc, char* argv[])
         if( (file_fd = open (file_name, O_RDWR | O_CREAT | O_TRUNC, 0666)) < 0)
         {
             perror("failed to open input file\n");
-            return 1;
+            goto ERROR_BUT_DEV_OPENED;
         }
 
         // Connect to master in the device
         if(ioctl(dev_fd, slave_IOCTL_CREATESOCK, ip) == -1)
         {
             perror("ioctl create slave socket error\n");
-            return 1;
+            goto ERROR_BUT_FILE_OPENED;
         }
 
         switch(method[0])
@@ -106,7 +102,7 @@ int main (int argc, char* argv[])
                     if (ftruncate(file_fd, offset + MAP_SIZE) == -1)
                     {
                         perror("slave ftruncate error\n");
-                        return 1;
+                        goto ERROR_BUT_SOCKET_CREATED;
                     }
                     file_address = mmap(NULL, MAP_SIZE,
                                         PROT_READ | PROT_WRITE, MAP_SHARED,
@@ -114,7 +110,7 @@ int main (int argc, char* argv[])
                     if (file_address == MAP_FAILED)
                     {
                         perror("slave file mmap error\n");
-                        return 1;
+                        goto ERROR_BUT_SOCKET_CREATED;
                     }
                     mmap_args.file_address = file_address;
                     mmap_args.length = MAP_SIZE;
@@ -123,13 +119,13 @@ int main (int argc, char* argv[])
                     if (ret < 0)
                     {
                         perror("ioctl client mmap error\n");
-                        return 1;
+                        goto ERROR_BUT_SOCKET_CREATED;
                     }
 
                     if (munmap(file_address, MAP_SIZE) != 0)
                     {
                         perror("master file munmap error\n");
-                        return 1;
+                        goto ERROR_BUT_SOCKET_CREATED;
                     }
 
                     // MAP_SIZE is integer multiple of PAGE_SIZE,
@@ -143,20 +139,21 @@ int main (int argc, char* argv[])
                 if (ftruncate(file_fd, offset) == -1)
                 {
                     perror("slave ftruncate error\n");
-                    return 1;
+                    goto ERROR_BUT_SOCKET_CREATED;
                 }
 
                 break;
 
             default:
                 fprintf(stderr, "Invalid method : %s\n", method);
-                return 1;
+                goto ERROR_BUT_SOCKET_CREATED;
         }
 
         // end receiving data, close the connection
         if(ioctl(dev_fd, slave_IOCTL_EXIT) == -1)
         {
             perror("ioclt client exits error\n");
+            goto ERROR_BUT_FILE_OPENED;
             return 1;
         }
 
@@ -172,6 +169,19 @@ int main (int argc, char* argv[])
             trans_time, total_file_size);
 
     return 0;
+
+// Error handling
+ERROR_BUT_SOCKET_CREATED:
+    if(ioctl(dev_fd, slave_IOCTL_EXIT) == -1)
+    {
+        perror("ioctl client exits error\n");
+    }
+ERROR_BUT_FILE_OPENED:
+    close(file_fd);
+ERROR_BUT_DEV_OPENED:
+    close(dev_fd);
+
+    return 1;
 }
 
 void help_message()

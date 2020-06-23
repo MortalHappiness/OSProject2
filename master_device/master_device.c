@@ -30,7 +30,6 @@
 #define master_IOCTL_EXIT 0x12345679
 #define master_IOCTL_GETFS 0x12345688 // get file size
 #define BUF_SIZE 512
-#define MAP_SIZE 8192 // 2 PAGE_SIZE
 
 typedef struct socket * ksocket_t;
 
@@ -50,6 +49,9 @@ static void __exit master_exit(void);
 
 int master_close(struct inode *inode, struct file *filp);
 int master_open(struct inode *inode, struct file *filp);
+int master_mmap(struct file *filp, struct vm_area_struct *vma);
+void master_vma_open(struct vm_area_struct *vma);
+void master_vma_close(struct vm_area_struct *vma);
 static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param);
 static ssize_t send_msg(struct file *file, const char __user *buf, size_t count, loff_t *data);//use when user is writing to this device
 static ksocket_t sockfd_srv, sockfd_cli;//socket for master and socket for slave
@@ -60,11 +62,69 @@ static int addr_len;
 //static  struct mmap_info *mmap_msg; // pointer to the mapped data in this device
 
 // ========================================
+// Device mmap implementation
 
-struct mmap_ioctl_args {
-    char *file_address;
-    size_t length;
+static struct vm_operations_struct master_vm_ops = {
+    .open = master_vma_open,
+    .close = master_vma_close,
 };
+
+int master_mmap(struct file *filp, struct vm_area_struct *vma)
+{
+    int i, npages;
+    unsigned long len, pfn;
+    void *kmalloc_area;
+
+    len = vma->vm_end - vma->vm_start;
+    npages = len >> PAGE_SHIFT;
+    if ((kmalloc_area = kmalloc(len, GFP_KERNEL)) == NULL)
+        return -1;
+    pfn = virt_to_phys(kmalloc_area) >> PAGE_SHIFT;
+
+    for (i = 0; i < npages; i++)
+    {
+        SetPageReserved(virt_to_page(
+                    ((unsigned long)kmalloc_area) + i * PAGE_SIZE));
+    }
+
+    if (remap_pfn_range(vma, vma->vm_start, pfn, len, vma->vm_page_prot))
+        return -EAGAIN;
+
+    vma->vm_ops = &master_vm_ops;
+    vma->vm_private_data = kmalloc_area;
+    filp->private_data = kmalloc_area;
+    master_vma_open(vma);
+
+    return 0;
+}
+
+void master_vma_open(struct vm_area_struct *vma)
+{
+    printk(KERN_NOTICE "[master_vma_open] virt %lx, phys %lx, len = %ld\n",
+            vma->vm_start, vma->vm_pgoff << PAGE_SHIFT, vma->vm_end - vma->vm_start);
+}
+
+void master_vma_close(struct vm_area_struct *vma)
+{
+    int i, npages;
+    unsigned long len;
+    void *kmalloc_area;
+
+    printk(KERN_NOTICE "[master_vma_close]\n");
+
+    len = vma->vm_end - vma->vm_start;
+    npages = len >> PAGE_SHIFT;
+    kmalloc_area = vma->vm_private_data;
+
+    for (i = 0; i < npages; i++)
+    {
+        ClearPageReserved(virt_to_page(
+                    ((unsigned long)kmalloc_area) + i * PAGE_SIZE));
+    }
+    kfree(kmalloc_area);
+}
+
+// ========================================
 
 //file operations
 static struct file_operations master_fops = {
@@ -73,6 +133,7 @@ static struct file_operations master_fops = {
     .open = master_open,
     .write = send_msg,
     .release = master_close,
+    .mmap = master_mmap,
 };
 
 //device info
@@ -154,7 +215,7 @@ int master_open(struct inode *inode, struct file *filp)
 }
 
 
-static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
+static long master_ioctl(struct file *filp, unsigned int ioctl_num, unsigned long ioctl_param)
 {
     long ret = -EINVAL;
     size_t data_size = 0, offset = 0;
@@ -164,11 +225,6 @@ static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
     pud_t *pud;
     pmd_t *pmd;
     pte_t *ptep, pte;
-
-    // For mmap
-    struct mmap_ioctl_args mmap_args;
-    char file_map[MAP_SIZE];
-
     old_fs = get_fs();
     set_fs(KERNEL_DS);
 
@@ -190,27 +246,9 @@ static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
             ret = 0;
             break;
         case master_IOCTL_MMAP:
-            // Get ioctl parameters
-            if (copy_from_user(&mmap_args,
-                              (void *)ioctl_param,
-                               sizeof(mmap_args)) != 0)
-            {
-                printk("master mmap ioctl_param copy_from_user error\n");
-                return -1;
-            }
-            /*printk("[IOCTL MMAP], %ld, %ld\n", (long)mmap_args.file_address, mmap_args.length);*/
-
-            // Copy into file_map
-            if (copy_from_user(file_map,
-                               mmap_args.file_address,
-                               mmap_args.length) != 0)
-            {
-                printk("master mmap file_map copy_from_user error\n");
-                return -1;
-            }
-            // Send message to slave
-            ksend(sockfd_cli, file_map, mmap_args.length, 0);
-
+            // filp->private_data is the area allocated by kmalloc
+            // ioctl_param is the length of the message
+            ksend(sockfd_cli, filp->private_data, ioctl_param, 0);
             ret = 0;
             break;
         case master_IOCTL_EXIT:
