@@ -15,8 +15,8 @@ do
             then
                 echo "Master Method: $mm Slave Method: $sm Case: $c Passed\n"
             else
-                echo "Master Method: $mm Slave Method: $sm Case: $c Failed\n"
-                echo "$result"
+                echo "Master Method: $mm Slave Method: $sm Case: $c Failed"
+                echo "$result\n"
             fi
         done
     done
