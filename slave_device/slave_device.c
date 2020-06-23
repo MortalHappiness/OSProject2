@@ -30,8 +30,6 @@
 
 
 #define BUF_SIZE 512
-#define MAP_SIZE 8192 // 2 PAGE_SIZE
-
 
 
 struct dentry  *file1;//debug file
@@ -51,6 +49,9 @@ static void __exit slave_exit(void);
 
 int slave_close(struct inode *inode, struct file *filp);
 int slave_open(struct inode *inode, struct file *filp);
+int slave_mmap(struct file *filp, struct vm_area_struct *vma);
+void slave_vma_open(struct vm_area_struct *vma);
+void slave_vma_close(struct vm_area_struct *vma);
 static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param);
 ssize_t receive_msg(struct file *filp, char *buf, size_t count, loff_t *offp );
 
@@ -59,11 +60,69 @@ static ksocket_t sockfd_cli;//socket to the master server
 static struct sockaddr_in addr_srv; //address of the master server
 
 // ========================================
+// Device mmap implementation
 
-struct mmap_ioctl_args {
-    char *file_address;
-    size_t length;
+static struct vm_operations_struct slave_vm_ops = {
+    .open = slave_vma_open,
+    .close = slave_vma_close,
 };
+
+int slave_mmap(struct file *filp, struct vm_area_struct *vma)
+{
+    int i, npages;
+    unsigned long len, pfn;
+    void *kmalloc_area;
+
+    len = vma->vm_end - vma->vm_start;
+    npages = len >> PAGE_SHIFT;
+    if ((kmalloc_area = kmalloc(len, GFP_KERNEL)) == NULL)
+        return -1;
+    pfn = virt_to_phys(kmalloc_area) >> PAGE_SHIFT;
+
+    for (i = 0; i < npages; i++)
+    {
+        SetPageReserved(virt_to_page(
+                    ((unsigned long)kmalloc_area) + i * PAGE_SIZE));
+    }
+
+    if (remap_pfn_range(vma, vma->vm_start, pfn, len, vma->vm_page_prot))
+        return -EAGAIN;
+
+    vma->vm_ops = &slave_vm_ops;
+    vma->vm_private_data = kmalloc_area;
+    filp->private_data = kmalloc_area;
+    slave_vma_open(vma);
+
+    return 0;
+}
+
+void slave_vma_open(struct vm_area_struct *vma)
+{
+    printk(KERN_NOTICE "[slave_vma_open] virt %lx, phys %lx, len = %ld\n",
+            vma->vm_start, vma->vm_pgoff << PAGE_SHIFT, vma->vm_end - vma->vm_start);
+}
+
+void slave_vma_close(struct vm_area_struct *vma)
+{
+    int i, npages;
+    unsigned long len;
+    void *kmalloc_area;
+
+    printk(KERN_NOTICE "[slave_vma_close]\n");
+
+    len = vma->vm_end - vma->vm_start;
+    npages = len >> PAGE_SHIFT;
+    kmalloc_area = vma->vm_private_data;
+
+    for (i = 0; i < npages; i++)
+    {
+        ClearPageReserved(virt_to_page(
+                    ((unsigned long)kmalloc_area) + i * PAGE_SIZE));
+    }
+    kfree(kmalloc_area);
+}
+
+// ========================================
 
 //file operations
 static struct file_operations slave_fops = {
@@ -71,7 +130,8 @@ static struct file_operations slave_fops = {
     .unlocked_ioctl = slave_ioctl,
     .open = slave_open,
     .read = receive_msg,
-    .release = slave_close
+    .release = slave_close,
+    .mmap = slave_mmap,
 };
 
 //device info
@@ -115,13 +175,12 @@ int slave_open(struct inode *inode, struct file *filp)
     return 0;
 }
 
-static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
+static long slave_ioctl(struct file *filp, unsigned int ioctl_num, unsigned long ioctl_param)
 {
     long ret = -EINVAL;
 
-    int addr_len ;
+    int addr_len;
     unsigned int i;
-    size_t len;
     char *tmp, ip[20], buf[BUF_SIZE];
     struct page *p_print;
     unsigned char *px;
@@ -131,10 +190,6 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
     pud_t *pud;
     pmd_t *pmd;
     pte_t *ptep, pte;
-
-    // For mmap
-    struct mmap_ioctl_args mmap_args;
-
     old_fs = get_fs();
     set_fs(KERNEL_DS);
 
@@ -175,40 +230,9 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
             break;
 
         case slave_IOCTL_MMAP:
-            // Get ioctl parameters
-            if (copy_from_user(&mmap_args,
-                              (void *)ioctl_param,
-                               sizeof(mmap_args)) != 0)
-            {
-                printk("slave mmap ioctl_param copy_from_user error\n");
-                return -1;
-            }
-
-            ret = 0; // This is the offset
-
-            // Assume slave_device know the MAP_SIZE, therefore
-            // mmap_args.length is unused. Maybe this can be change to
-            // only pass single argument(address) to this function.
-
-            // NOTE: Here assume that MAP_SIZE is integer multiple of
-            //       BUF_SIZE for simplicity.
-            do
-            {
-                // Receive message and put it into buffer
-                len = krecv(sockfd_cli, buf, BUF_SIZE, 0);
-
-                // Write into the file map
-                if (copy_to_user(mmap_args.file_address + ret, buf, len) != 0)
-                {
-                    printk("slave mmap file_map copy_to_user error\n");
-                    return -1;
-                }
-
-                ret += len;
-
-            } while (len == BUF_SIZE && ret != MAP_SIZE);
-            printk("[slave device] transmission done, ret = %ld\n", ret);
-
+            // filp->private_data is the area allocated by kmalloc
+            // ioctl_param is the length of the message
+            ret = krecv(sockfd_cli, filp->private_data, ioctl_param, 0);
             break;
 
         case slave_IOCTL_EXIT:

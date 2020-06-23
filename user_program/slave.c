@@ -17,11 +17,6 @@
 #define slave_IOCTL_MMAP 0x12345678
 #define slave_IOCTL_EXIT 0x12345679
 
-struct mmap_ioctl_args {
-    char *file_address;
-    size_t length;
-};
-
 void help_message();
 
 // ========================================
@@ -33,7 +28,6 @@ int main (int argc, char* argv[])
     size_t ret, file_size, total_file_size = 0, data_size = -1, offset;
     int n_files;
     char *file_name;
-    struct mmap_ioctl_args mmap_args;
     struct timeval start;
     struct timeval end;
     //calulate the time between the device is opened and it is closed
@@ -64,6 +58,20 @@ int main (int argc, char* argv[])
     {
         perror("failed to open /dev/slave_device\n");
         return 1;
+    }
+
+    // mmap the device if the method is mmap
+    if (method[0] == 'm')
+    {
+        kernel_address = mmap(NULL, MAP_SIZE,
+                              PROT_READ, MAP_SHARED,
+                              dev_fd, 0);
+        if (kernel_address == MAP_FAILED)
+        {
+            perror("slave device mmap error\n");
+            close(dev_fd);
+            return 1;
+        }
     }
 
     for (int i = 2; n_files > 0; ++i, --n_files)
@@ -105,22 +113,23 @@ int main (int argc, char* argv[])
                         goto ERROR_BUT_SOCKET_CREATED;
                     }
                     file_address = mmap(NULL, MAP_SIZE,
-                                        PROT_READ | PROT_WRITE, MAP_SHARED,
+                                        PROT_WRITE, MAP_SHARED,
                                         file_fd, offset);
                     if (file_address == MAP_FAILED)
                     {
                         perror("slave file mmap error\n");
                         goto ERROR_BUT_SOCKET_CREATED;
                     }
-                    mmap_args.file_address = file_address;
-                    mmap_args.length = MAP_SIZE;
 
-                    ret = ioctl(dev_fd, slave_IOCTL_MMAP, &mmap_args);
+                    ret = ioctl(dev_fd, slave_IOCTL_MMAP, MAP_SIZE);
                     if (ret < 0)
                     {
                         perror("ioctl client mmap error\n");
                         goto ERROR_BUT_SOCKET_CREATED;
                     }
+
+                    // Copy device map into file map
+                    memcpy(file_address, kernel_address, ret);
 
                     if (munmap(file_address, MAP_SIZE) != 0)
                     {
@@ -158,6 +167,12 @@ int main (int argc, char* argv[])
         }
 
         close(file_fd);
+    }
+
+    if (method[0] == 'm' && munmap(kernel_address, MAP_SIZE) != 0)
+    {
+        perror("slave device munmap error\n");
+        goto ERROR_BUT_DEV_OPENED;
     }
 
     close(dev_fd);
