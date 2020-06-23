@@ -12,6 +12,7 @@
 
 #define PAGE_SIZE 4096
 #define BUF_SIZE 512
+#define MAP_SIZE 8192 // 2 PAGE_SIZE
 #define slave_IOCTL_CREATESOCK 0x12345677
 #define slave_IOCTL_MMAP 0x12345678
 #define slave_IOCTL_EXIT 0x12345679
@@ -24,7 +25,7 @@ int main (int argc, char* argv[])
 {
     char buf[BUF_SIZE];
     int dev_fd, file_fd;// the fd for the device and the fd for the input file
-    size_t ret, file_size, total_file_size = 0, data_size = -1;
+    size_t ret, file_size, total_file_size = 0, data_size = -1, offset;
     int n_files;
     char *file_name;
     struct timeval start;
@@ -59,9 +60,19 @@ int main (int argc, char* argv[])
         return 1;
     }
 
-    // TODO:
-    // Now, for each file I create a socket.
-    // Maybe we need to consider how to transmit all files with single socket.
+    // mmap the device if the method is mmap
+    if (method[0] == 'm')
+    {
+        kernel_address = mmap(NULL, MAP_SIZE,
+                              PROT_READ, MAP_SHARED,
+                              dev_fd, 0);
+        if (kernel_address == MAP_FAILED)
+        {
+            perror("slave device mmap error\n");
+            close(dev_fd);
+            return 1;
+        }
+    }
 
     for (int i = 2; n_files > 0; ++i, --n_files)
     {
@@ -70,14 +81,14 @@ int main (int argc, char* argv[])
         if( (file_fd = open (file_name, O_RDWR | O_CREAT | O_TRUNC, 0666)) < 0)
         {
             perror("failed to open input file\n");
-            return 1;
+            goto ERROR_BUT_DEV_OPENED;
         }
 
         // Connect to master in the device
         if(ioctl(dev_fd, slave_IOCTL_CREATESOCK, ip) == -1)
         {
             perror("ioctl create slave socket error\n");
-            return 1;
+            goto ERROR_BUT_FILE_OPENED;
         }
 
         switch(method[0])
@@ -91,54 +102,63 @@ int main (int argc, char* argv[])
                 }
                 break;
 
-            case 'm': ;//mmap
-                size_t pageoff = 0, diff = 0;
-                char *dst, *src;
-                if((file_size = (size_t)ioctl(dev_fd, slave_IOCTL_MMAP)) == 0) // recv file size from slave device
-                {
-                    perror("failed to recv file size from slave device\n");
-                }
-                printf("file_size received is %zu\n", file_size);
-                dst = mmap(NULL, file_size, PROT_READ|PROT_WRITE, MAP_SHARED, file_fd, pageoff);
-                char *tmp = dst;
-                while(pageoff < file_size)
-                {
-                    // read diff bytes each round
-                    diff = file_size - pageoff;
-                    // maybe we can use mmap instead
-                    read(dev_fd, buf, diff); // read from the device
+            case 'm': //mmap
+                offset = 0; // Note that offset of mmap must be page aligned
 
-                    if(diff > BUF_SIZE)
+                while ((ret = ioctl(dev_fd, slave_IOCTL_MMAP, MAP_SIZE)) > 0)
+                {
+                    if (ftruncate(file_fd, offset + ret) == -1)
                     {
-                        memcpy(tmp, buf, BUF_SIZE);
-                        tmp += BUF_SIZE;
-                        pageoff += BUF_SIZE;
+                        perror("slave ftruncate error\n");
+                        goto ERROR_BUT_SOCKET_CREATED;
                     }
-                    else
+                    file_address = mmap(NULL, ret,
+                                        PROT_WRITE, MAP_SHARED,
+                                        file_fd, offset);
+                    if (file_address == MAP_FAILED)
                     {
-                        memcpy(tmp, buf, diff);
-                        tmp += diff;
-                        pageoff += diff;
-                        break;
+                        perror("slave file mmap error\n");
+                        goto ERROR_BUT_SOCKET_CREATED;
                     }
+
+                    // Copy device map into file map
+                    memcpy(file_address, kernel_address, ret);
+
+                    if (munmap(file_address, ret) != 0)
+                    {
+                        perror("slave file munmap error\n");
+                        goto ERROR_BUT_SOCKET_CREATED;
+                    }
+
+                    // MAP_SIZE is integer multiple of PAGE_SIZE,
+                    // and ret is MAP_SIZE except at EOF,
+                    // so it is safe to update offset by ret
+                    offset += ret;
+                    total_file_size += ret;
                 }
-                munmap(dst, file_size);
+
                 break;
-
 
             default:
                 fprintf(stderr, "Invalid method : %s\n", method);
-                return 1;
+                goto ERROR_BUT_SOCKET_CREATED;
         }
 
         // end receiving data, close the connection
         if(ioctl(dev_fd, slave_IOCTL_EXIT) == -1)
         {
             perror("ioclt client exits error\n");
+            goto ERROR_BUT_FILE_OPENED;
             return 1;
         }
 
         close(file_fd);
+    }
+
+    if (method[0] == 'm' && munmap(kernel_address, MAP_SIZE) != 0)
+    {
+        perror("slave device munmap error\n");
+        goto ERROR_BUT_DEV_OPENED;
     }
 
     close(dev_fd);
@@ -150,6 +170,19 @@ int main (int argc, char* argv[])
             trans_time, total_file_size);
 
     return 0;
+
+// Error handling
+ERROR_BUT_SOCKET_CREATED:
+    if(ioctl(dev_fd, slave_IOCTL_EXIT) == -1)
+    {
+        perror("ioctl client exits error\n");
+    }
+ERROR_BUT_FILE_OPENED:
+    close(file_fd);
+ERROR_BUT_DEV_OPENED:
+    close(dev_fd);
+
+    return 1;
 }
 
 void help_message()
