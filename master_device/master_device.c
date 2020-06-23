@@ -74,17 +74,12 @@ int master_mmap(struct file *filp, struct vm_area_struct *vma)
     int i, npages;
     unsigned long len, pfn;
     void *kmalloc_area;
-    struct page *page_ptr;
 
     len = vma->vm_end - vma->vm_start;
     npages = len >> PAGE_SHIFT;
     if ((kmalloc_area = kmalloc(len, GFP_KERNEL)) == NULL)
         return -1;
     pfn = virt_to_phys(kmalloc_area) >> PAGE_SHIFT;
-
-    // Print the page descriptor
-    page_ptr = pfn_to_page(pfn);
-    printk("[master page descriptor] %016lX\n", page_ptr->flags);
 
     for (i = 0; i < npages; i++)
     {
@@ -112,14 +107,20 @@ void master_vma_open(struct vm_area_struct *vma)
 void master_vma_close(struct vm_area_struct *vma)
 {
     int i, npages;
-    unsigned long len;
+    unsigned long len, pfn;
     void *kmalloc_area;
+    struct page *page_ptr;
 
     printk(KERN_NOTICE "[master_vma_close]\n");
 
     len = vma->vm_end - vma->vm_start;
     npages = len >> PAGE_SHIFT;
     kmalloc_area = vma->vm_private_data;
+    pfn = virt_to_phys(kmalloc_area) >> PAGE_SHIFT;
+
+    // Print the page descriptor
+    page_ptr = pfn_to_page(pfn);
+    printk("[master page descriptor] %016lX\n", page_ptr->flags);
 
     for (i = 0; i < npages; i++)
     {
