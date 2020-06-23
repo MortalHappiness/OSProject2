@@ -105,7 +105,7 @@ void slave_vma_open(struct vm_area_struct *vma)
 void slave_vma_close(struct vm_area_struct *vma)
 {
     int i, npages;
-    unsigned long len, pfn;
+    unsigned long len;
     void *kmalloc_area;
     struct page *page_ptr;
 
@@ -114,10 +114,9 @@ void slave_vma_close(struct vm_area_struct *vma)
     len = vma->vm_end - vma->vm_start;
     npages = len >> PAGE_SHIFT;
     kmalloc_area = vma->vm_private_data;
-    pfn = virt_to_phys(kmalloc_area) >> PAGE_SHIFT;
 
     // Print the page descriptor
-    page_ptr = pfn_to_page(pfn);
+    page_ptr = virt_to_page(kmalloc_area);
     printk("[slave page descriptor] %016lX\n", page_ptr->flags);
 
     for (i = 0; i < npages; i++)
