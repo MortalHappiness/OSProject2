@@ -115,7 +115,6 @@ int main (int argc, char* argv[])
                     file_address = mmap(NULL, ret,
                                         PROT_WRITE, MAP_SHARED,
                                         file_fd, offset);
-                    printf("ret = %ld, offset = %ld\n", ret, offset);
                     if (file_address == MAP_FAILED)
                     {
                         perror("slave file mmap error\n");
