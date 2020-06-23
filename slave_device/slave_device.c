@@ -180,7 +180,8 @@ static long slave_ioctl(struct file *filp, unsigned int ioctl_num, unsigned long
     long ret = -EINVAL;
 
     int addr_len;
-    unsigned int i;
+    unsigned long len;
+    char *kmalloc_area;
     char *tmp, ip[20], buf[BUF_SIZE];
     struct page *p_print;
     unsigned char *px;
@@ -230,9 +231,16 @@ static long slave_ioctl(struct file *filp, unsigned int ioctl_num, unsigned long
             break;
 
         case slave_IOCTL_MMAP:
-            // filp->private_data is the area allocated by kmalloc
+            kmalloc_area = (char *)filp->private_data;
+            ret = 0;
+
             // ioctl_param is the length of the message
-            ret = krecv(sockfd_cli, filp->private_data, ioctl_param, 0);
+            while (ret != ioctl_param)
+            {
+                len = krecv(sockfd_cli, kmalloc_area + ret, ioctl_param - ret, 0);
+                if (len == 0) break;
+                ret += len;
+            }
             break;
 
         case slave_IOCTL_EXIT:

@@ -105,35 +105,29 @@ int main (int argc, char* argv[])
             case 'm': //mmap
                 offset = 0; // Note that offset of mmap must be page aligned
 
-                do
+                while ((ret = ioctl(dev_fd, slave_IOCTL_MMAP, MAP_SIZE)) > 0)
                 {
-                    if (ftruncate(file_fd, offset + MAP_SIZE) == -1)
+                    if (ftruncate(file_fd, offset + ret) == -1)
                     {
                         perror("slave ftruncate error\n");
                         goto ERROR_BUT_SOCKET_CREATED;
                     }
-                    file_address = mmap(NULL, MAP_SIZE,
+                    file_address = mmap(NULL, ret,
                                         PROT_WRITE, MAP_SHARED,
                                         file_fd, offset);
+                    printf("ret = %ld, offset = %ld\n", ret, offset);
                     if (file_address == MAP_FAILED)
                     {
                         perror("slave file mmap error\n");
                         goto ERROR_BUT_SOCKET_CREATED;
                     }
 
-                    ret = ioctl(dev_fd, slave_IOCTL_MMAP, MAP_SIZE);
-                    if (ret < 0)
-                    {
-                        perror("ioctl client mmap error\n");
-                        goto ERROR_BUT_SOCKET_CREATED;
-                    }
-
                     // Copy device map into file map
                     memcpy(file_address, kernel_address, ret);
 
-                    if (munmap(file_address, MAP_SIZE) != 0)
+                    if (munmap(file_address, ret) != 0)
                     {
-                        perror("master file munmap error\n");
+                        perror("slave file munmap error\n");
                         goto ERROR_BUT_SOCKET_CREATED;
                     }
 
@@ -142,13 +136,6 @@ int main (int argc, char* argv[])
                     // so it is safe to update offset by ret
                     offset += ret;
                     total_file_size += ret;
-
-                } while (ret == MAP_SIZE);
-
-                if (ftruncate(file_fd, offset) == -1)
-                {
-                    perror("slave ftruncate error\n");
-                    goto ERROR_BUT_SOCKET_CREATED;
                 }
 
                 break;
