@@ -188,9 +188,7 @@ static long slave_ioctl(struct file *filp, unsigned int ioctl_num, unsigned long
     int addr_len;
     unsigned long len;
     char *kmalloc_area;
-    char *tmp, ip[20], buf[BUF_SIZE];
-    struct page *p_print;
-    unsigned char *px;
+    char *tmp, ip[20];
 
     pgd_t *pgd;
     p4d_t *p4d;

@@ -224,7 +224,6 @@ int master_open(struct inode *inode, struct file *filp)
 static long master_ioctl(struct file *filp, unsigned int ioctl_num, unsigned long ioctl_param)
 {
     long ret = -EINVAL;
-    size_t data_size = 0, offset = 0;
     char *tmp;
     pgd_t *pgd;
     p4d_t *p4d;
