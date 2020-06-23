@@ -1,5 +1,8 @@
-# OSProject2
-Project 2 for the course "Operating System" at NTU.
+# OSProject2 Website
+The website for project 2 for the course "Operating System" in NTU.
+
+## Website
+https://hackmd.io/@buB4b8JxReG7RX6wHM9Iwg/HkeM7wt58
 
 Hyperspace by HTML5 UP
 html5up.net | @ajlkn
