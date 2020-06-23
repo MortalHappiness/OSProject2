@@ -1,6 +1,9 @@
 # OSProject2
 Project 2 for the course "Operating System" in NTU.
 
+## Project Spec.
+https://hackmd.io/@buB4b8JxReG7RX6wHM9Iwg/HkeM7wt58
+
 ## Website
 https://mortalhappiness.github.io/OSProject2/
 
