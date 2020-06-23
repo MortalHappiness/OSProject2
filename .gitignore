@@ -1,3 +1,5 @@
+.DS_STORE
+
 ksocket/
 master_device/
 slave_device/
