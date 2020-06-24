@@ -1,0 +1,5 @@
+Transmission time: 0.281600 ms, File size: 16388 bytes
+Transmission time: 0.313000 ms, File size: 16388 bytes
+Transmission time: 0.305700 ms, File size: 16388 bytes
+Transmission time: 0.276000 ms, File size: 16388 bytes
+Transmission time: 0.271300 ms, File size: 16388 bytes
