@@ -243,6 +243,7 @@
 							<h3>Result:</h3>
 							<p>fcntl在實作上會需要大量的system call，而通常system call會較memory operation花上不少時間，所以我們可以預測mmap會比起fcntl還要有效率。而從我們的實驗結果可以看出，在檔案較大的時候（sample_input_2 and pdf）時，mmap相比fcntl速度為fcntl的2倍以上，而在檔案較小的情況之下（sample_input_1 and medium_case），兩者的效率差不多，我們猜測可能是因為在小檔案的情況下，mmap initialize的時候所產生的page fault以及連帶的更新TLB裡的資訊所花的時間會抵消mmap理論上對fcntl的優勢，所以才會表現出兩者效率沒有相差多少的情形。甚者，我們可以預測在file size很小的時候，fcntl的效率會比mmap好。</p>
 						    <p>在stability方面，我們可以看到每一組執行五次時間的標準差都小於0.1，因此效能上很穩定，不會有一些很糟糕的情況發生（除了fcntl sample_input_2，可看到前三次都二十幾ms，後兩次三十幾ms，推測是傳大檔案時網路的穩定性問題，如後兩次突然queuing delay變大等）。</p>
+						    <p>另外在medium_case和medium_case_off這兩個case，實驗後發現效率並無顯著差異。</p>
 						</div>
 					</section>
 
