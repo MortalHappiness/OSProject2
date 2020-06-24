@@ -20,13 +20,12 @@
 					<nav>
 						<ul>
 							<li><a href="#intro">Welcome</a></li>
-							<li><a href="#one">Introduction</a></li>
-							<li><a href="#two">Design</a></li>
-							<li><a href="#three">Demo</a></li>
-							<li><a href="#four">Evaluation</a></li>
-							<li><a href="#five">Discussion</a></li>
-							<li><a href="#six">Repo</a></li>
-							<li><a href="#seven">Reference</a></li>
+							<li><a href="#design">Design</a></li>
+							<li><a href="#demo">Demo</a></li>
+							<li><a href="#evaluation">Evaluation</a></li>
+							<li><a href="#discussion">Discussion</a></li>
+							<li><a href="#repo">Repo</a></li>
+							<li><a href="#reference">Reference</a></li>
 						</ul>
 					</nav>
 				</div>
@@ -43,90 +42,62 @@
 							<h2>Group 9</h2>
 							<h3>Member:</h3>
 							<ul>
-								<li>B0xxxxxxx</li>
-								<li>B0xxxxxxx</li>
-								<li>B0xxxxxxx</li>
-								<li>B07901184 陳映樵</li>
-								<li>B0xxxxxxx</li>
+								<li>B07901069  劉奇聖</li>
+								<li>B05202050  劉安浚</li>
+								<li>B05901184  賴言禮</li>
+								<li>B07901184  陳映樵</li>
+								<li>B05103055  黃子瑋</li>
 							</ul>
 						</div>
 					</section>
 
-				<!-- One -->
-					<section id="one" class="wrapper style2 spotlights">
-						<section>
-							<div class="content">
-								<div class="inner">
-									<h2>Design</h2>
-									<p>Design</p>
-									<ul class="actions">
-										<li><a href="#two" class="button">Learn more</a></li>
-									</ul>
-								</div>
-							</div>
-						</section>
-						<section>
-							<div class="content">
-								<div class="inner">
-									<h2>Demo</h2>
-									<p>Demo</p>
-									<ul class="actions">
-										<li><a href="#three" class="button">Learn more</a></li>
-									</ul>
-								</div>
-							</div>
-						</section>
-						<section>
-							<div class="content">
-								<div class="inner">
-									<h2>Evaluation</h2>
-									<p>Evaluation</p>
-									<ul class="actions">
-										<li><a href="four" class="button">Learn more</a></li>
-									</ul>
-								</div>
-							</div>
-						</section>
-						<section>
-							<div class="content">
-								<div class="inner">
-									<h2>Discussion</h2>
-									<p>Discussion</p>
-									<ul class="actions">
-										<li><a href="five" class="button">Learn more</a></li>
-									</ul>
-								</div>
-							</div>
-						</section>
-					</section>
-
-				<!-- Two -->
-					<section id="two" class="wrapper style3 fade-up">
+				<!-- Design -->
+					<section id="design" class="wrapper style2 fade-up">
 						<div class="inner">
 							<h2>Design</h2>
-							<p>Design</p>
 							<div class>
 								<section>
 									<span class="icon solid major fa-link"></span>
-									<h3>socket</h3>
-									<p>This is how we implement socket.</p>
+									<h3>Input parameters</h3>
+									<p>Input parameter的部份我設計成和sample一樣，但是在parameter數目不對的時候會print usage出來，例如說有2個檔案輸入但卻只給一個檔名就會print出help message。
+									</p>
 								</section>
 								<section>
 									<span class="icon solid major fa-code"></span>
-									<h3>ioctl</h3>
-									<p>This is how we implement ioctl.</p>
+									<h3>Master side</h3>
+									<h4>(a) User program</h4>
+									<p>一開始會先把master device打開，如果method是mmap的話則將device mmap到一段MAP_SIZE大的記憶體，接著對於每個檔案計算檔案大小並把它們打開，並且為該檔案開一個socket接收來自slave的連接。如果method是fcntl的話就不斷read檔案並write到device；如果是mmap的話則不斷把檔案mmap到一段不大於MAP_SIZE的記憶體，並把該記憶體的內容copy到device的mmap，再call ioctl叫device把內容傳出去，直到所有檔案都傳出去為止。</p>
+									<h4>(b) Master device</h4>
+									<p>只要user_program call write就把message copy到一個buffer，再把該buffer的內容傳出去。如果user_program call mmap的話則allocate一塊MAP_SIZE大的記憶體並把該段記憶體的所有page設成reserved避免被swap out，再把該段記憶體map到user space，user_program call munmap再free掉該記憶體，當user_program call ioctl的時候就把該段記憶體的內容傳出去。</p>
 								</section>
 								<section>
-									<span class="icon solid major fa-cog"></span>
-									<h3>mmap</h3>
-									<p>This is how we implement mmap.</p>
+									<span class="icon solid major fa-code"></span>
+									<h3>Slave sice</h3>
+									<h4>(a) User program</h4>
+									<p>一開始會先把slave device打開，如果method是mmap的話則將device mmap到一段MAP_SIZE大的記憶體，接著對於每個檔案把檔案打開，為該檔案開一個socket連接到master。如果method是fcntl的話就不斷read device並write到file裡；如果是mmap的話則不斷call ioctl叫device把接收到的檔案放在device mmap裡，接著再根據devicereturn的value得知file需要增長多大，ftruncate並mmap該file，最後再把device mmap的內容copy到file mmap，直到所有檔案都接收到為止。</p>
+									<h4>(a) Slave device</h4>
+									<p>只要user_program call read就從socket接收message到一個buffer，再把該buffer的內容copy到user space指定的buffer。如果user_program call mmap的話則allocate一塊MAP_SIZE大的記憶體並把該段記憶體的所有page設成reserved避免被swap out，再把該段記憶體map到user space，user_program call munmap再free掉該記憶體，當user_program call ioctl的時候就不斷從socket接收message直到填滿該段記憶體或沒有message接收，再return寫了多長的message到該段記憶體回user_program。</p>
+								</section>
+								<section>
+									<span class="icon solid major fa-gem"></span>
+									<h3>Test dataset</h3>
+									<h4>(a) Sample input 1</h4>
+									<p>助教提供的測資，裡面包含數個較小的純文字檔。</p>
+									<h4>(b) Sample input 2</h4>
+									<p>助教提供的測資，裡面包含一個較大的純文字檔。</p>
+									<h4>(c) PDF</h4>
+									<p>這個資料夾裏面放的都是pdf檔，想測試看看非文字檔會不會傳成功。</p>
+									<h4>(d) empty file</h4>
+									<p>這是一個0 byte的空檔案，為了測試special case會不會傳成功。</p>
+									<h4>(e)</h4>
+									<p></p>
 								</section>
 							</div>
 						</div>
 					</section>
 
-				<!-- Three -->
-					<section id="three" class="wrapper style1 fade-up">
+				<!-- Demo -->
+					<section id="demo" class="wrapper style3 fade-up">
 						<div class="inner">
 							<h2>Demo</h2>
 							<p>This is our Demo video.</p>
@@ -140,8 +111,8 @@
 						</div>
 					</section>
 
-				<!-- Four  -->
-				    <section id="four" class="wrapper style2 fade-up">
+				<!-- Evalutaion -->
+				    <section id="evaluation" class="wrapper style1 fade-up">
 						<div class="inner">
 							<h2>Evaluation</h2>
 							<p>This is our evaluation.</p>
@@ -210,25 +181,28 @@
 						</div>
 					</section>
 
-				<!-- Five  -->
-					<section id="five" class="wrapper style3 fade-up">
+				<!-- Discussion -->
+					<section id="discussion" class="wrapper style2 fade-up">
 						<div class="inner">
 							<h2>Discussion</h2>
-							<p>This is our discussion.</p>
-							<div>
-								<p>There are some factors that will effect the performance of this program.</p>
-								<ol>
-								  <li>System call (Interrupt)</li>
-								  <li>User space vs Kernel space</li>
-								  <li>The complexity of the function</li>
-								  <li>Socket communication</li>
-								</ol>
-							</div>
+							<h3>mmap 優點：</h3>
+							<ol>
+								<li>一般I/O需要將資料寫到buffer且存取速度慢。而mmap將資料映射到虛擬記憶體上，通過對這段記憶體的讀取和修改，實現對文件的讀取和修改，因為省去buffer這一層的緣故，mmap速度較快。</li>
+								<li>通常呼叫一次system call的成本相對較高，因為CPU除了需要處理interrupt之外，還需要做context switch，因此成本相對一般function高。而mmap只有一開始的時候需要去分配記憶體之外，其他時候就可以交由user application去直接操作記憶體，相比read()或是write()需要讓系統一次又一次的去處理I/O，許多不必要的overhead可以去掉，因此mmap相比fcntl來說更有效率。</li>
+								<li>呼叫fcntl的read()或write()這兩個system call時需要copy_from_user()或copy_to_user()，也就是要使data在kernel space以及user space之間轉移，然而因為mmap是直接讓user可以直接access到device的memory，因此這一層轉移在mmap就可以省略，因此較fcntl來說更省時間。</li>
+							</ol>
+							<h3>mmap 缺點：</h3>
+							<ol>
+								<li>mmap分配的記憶體空間都是以page size為最小單位，如此一來若將小檔案map在記憶體上，可能會有page使用率不高的問題，造成internal fragmentation。</li>
+								<li>相比fcntl來說，mmap需要在device端額外實作，因此對於developer的負擔比較大。另外因為mmap在實作方面比較複雜，因此在檔案較小的情況下，fcntl這種比較簡單的方法會顯得較有效率。</li>
+							</ol>
+							<h3>Conclusion：</h3>
+							<p>雖然mmap可能會浪費比較多記憶體空間，或是在檔案較小時performance較差，但是在一般的情況下來說mmap的速度會比fcntl快上2~3倍，因此如果開發者有能力的話，基本上建議實作mmap，而使用者來說用mmap的效率會比一般的I/O高上不少。</p>
 						</div>
 					</section>
 
-				<!-- Six   -->
-					<section id="six" class="wrapper style1 fade-up">
+				<!-- Repository -->
+					<section id="repo" class="wrapper style3 fade-up">
 						<div class="inner">
 							<h2>Repository</h2>
 							<p>This is the link of our reppository.</p>
@@ -238,14 +212,18 @@
 						</div>
 					</section>
 
-				<!-- Seven -->
-				    <section id="seven" class="wrapper style2 fade-up">
+				<!-- Reference -->
+				    <section id="reference" class="wrapper style1 fade-up">
 						<div class="inner">
 							<h2>Reference</h2>
-							<p>Reference</p>
-							<div >
-								<a href="">reference link</a>
-							</div>
+							<ol>
+								<li><a href="https://linux-kernel-labs.github.io/refs/heads/master/labs/memory_mapping.html?fbclid=IwAR1jZGBSMkknbMdXj45a6zPlwAlu3_0b-rxLxlvr613ZuONCD3VPWA5Rbu4" target="_blank">linux kernel labs</a></li>
+								<li><a href="https://man7.org/linux/man-pages/man2/mmap.2.html" target="_blank">mmap</a></li>
+								<li><a href="https://lwn.net/images/pdf/LDD3/ch15.pdf" target="_blank">Memory mapping and DMA</a></li>
+								<li><a href="http://rswiki.csie.org/lxr/http/source/include/linux/mm_types.h?v=linux-4.5.4#L44" target="_blank">rswiki-linux-4.5.4</a></li>
+								<li><a href="https://www.man7.org/linux/man-pages/man2/ioctl.2.html" target="_blank">ioctl</a></li>
+								<li><a href="https://man7.org/linux/man-pages/man2/ftruncate.2.html" target="_blank">ftruncate</a></li>
+							</ol>
 						</div>
 					</section>
 				
