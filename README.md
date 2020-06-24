@@ -1,5 +1,8 @@
-# OSProject2
-Project 2 for the course "Operating System" at NTU.
+# OSProject2 Website
+The website for project 2 for the course "Operating System" in NTU.
+
+## Website
+https://mortalhappiness.github.io/OSProject2/
 
 Hyperspace by HTML5 UP
 html5up.net | @ajlkn
